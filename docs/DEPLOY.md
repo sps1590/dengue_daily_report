@@ -3,10 +3,10 @@
 ## 1. Push to GitHub
 
 The repository is already initialised with a commit history. Create an empty
-repository named `dengue_daily_info` on GitHub, then:
+repository named `dengue_daily_report` on GitHub, then:
 
 ```bash
-git remote add origin https://github.com/<your-account>/dengue_daily_info.git
+git remote add origin https://github.com/<your-account>/dengue_daily_report.git
 git branch -M main
 git push -u origin main
 ```
@@ -16,7 +16,7 @@ already has both, and the push would be rejected as a non-fast-forward.
 
 ## 2. Import into Vercel
 
-- New Project, pick `dengue_daily_info`.
+- New Project, pick `dengue_daily_report`.
 - Framework preset: Next.js. Everything else can stay on defaults; `vercel.json`
   supplies the region and the function timeouts.
 

@@ -6,6 +6,49 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-03 — v1.1.0, Dashboard tab, repo rename to `dengue_daily_report`
+
+### What changed
+
+1. **Dashboard tab** (`app/dashboard/page.tsx`, `components/Dashboard.tsx`,
+   `lib/history.ts`). Every report the Report tab successfully fetches is now
+   saved to `localStorage` in the browser (client-side only — no server store
+   yet, consistent with the "Next" item already logged below). The Dashboard
+   lists every saved date with its confidence/method badge, headline figures,
+   and download buttons for both Excel scripts and the brief, if one has been
+   generated for that date. Downloads are rebuilt from the stored report JSON
+   on each click (via the same `/api/excel` route the Report tab uses, and the
+   same `briefToHtml()` for the brief) rather than replayed from a cached
+   blob — so every download is a live working file: the workbook keeps its
+   `SUM` formulas, the brief is plain HTML. Neither is a flattened snapshot.
+2. **Shared download/footer code** extracted so the Report tab and Dashboard
+   don't duplicate it: `lib/download.ts` (the `/api/excel` call + blob
+   download) and `components/Footer.tsx` (the data-caveat footer).
+3. **Tab navigation** added to `Masthead.tsx` (now a client component, uses
+   `usePathname`) so both tabs share one header.
+4. **Project moved into its own repository, `dengue_daily_report`** (GitHub)
+   — the name the client asked for. `package.json`'s `name` field and the
+   README title were updated to match; nothing in `lib/` or the DGHS-facing
+   code changed, since none of it referenced the old name.
+
+### Verified
+
+| What | How | Result |
+|---|---|---|
+| `npm run typecheck` | `tsc --noEmit` | Clean |
+| `npm run build` | `next build` | Succeeds, same route shape plus `/dashboard` |
+| Dashboard → Excel download | Seeded a synthetic report into `localStorage`, clicked both script buttons in a running dev server | `POST /api/excel` → 200 for both `legacy` and `unicode` |
+| Report tab still fetches, marks pipeline steps, shows the "did not produce a report" error state | Ran against today's date in the dev sandbox | Works; the DGHS fetch itself still fails from this sandbox for the reason already logged below (not something this change could affect) |
+
+### Not verified
+
+- The Dashboard's real end-to-end path (fetch a real release on the Report
+  tab → confirm it appears on the Dashboard → download from there) — blocked
+  by the same DGHS `robots.txt` restriction noted below. The synthetic-data
+  check above exercises the same code path (`downloadExcelFile` →
+  `/api/excel`) that a real fetch would use, so this is a low-risk gap, but
+  run it for real once a live fetch succeeds.
+
 ## 2026-09-03 — v1.0.0, initial build
 
 ### Requirements taken from the brief

@@ -1,5 +1,5 @@
 {
-  "name": "dengue-daily-info",
+  "name": "dengue_daily_report",
   "version": "1.0.0",
   "private": true,
   "description": "Turns the DGHS daily dengue press release into the NMEP reporting workbook and a management brief.",

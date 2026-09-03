@@ -1,5 +1,14 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { LABELS } from '@/lib/bijoy';
 import { toBengaliLongDate, toEnglishLongDate } from '@/lib/bengali';
+
+const NAV = [
+  { href: '/', label: 'Report' },
+  { href: '/dashboard', label: 'Dashboard' },
+] as const;
 
 /**
  * The page opens with the form itself. Anyone in this workflow recognises the
@@ -7,6 +16,8 @@ import { toBengaliLongDate, toEnglishLongDate } from '@/lib/bengali';
  * job an abstract dashboard header could not.
  */
 export function Masthead({ date }: { date: string | null }) {
+  const pathname = usePathname();
+
   return (
     <header className="border-b border-rule bg-card">
       <div className="mx-auto max-w-[1180px] px-6 py-7">
@@ -24,6 +35,23 @@ export function Masthead({ date }: { date: string | null }) {
           </span>
           {date && <span className="font-bangla text-[13px]">{toBengaliLongDate(date)}</span>}
         </div>
+
+        <nav className="mt-4 flex justify-center gap-1">
+          {NAV.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`rounded-sheet px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+                  active ? 'bg-signal text-white' : 'text-muted hover:bg-signal-wash hover:text-signal'
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </header>
   );

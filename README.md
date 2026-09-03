@@ -1,4 +1,4 @@
-# dengue_daily_info
+# dengue_daily_report
 
 Turns the DGHS daily dengue press release into the workbook NMEP circulates, and drafts a management brief from it.
 
@@ -20,6 +20,13 @@ Two outputs:
 
 - **Excel** — the government sheet, in either legacy SutonnyMJ or Unicode Bangla.
 - **Management brief** — interpretation rather than restatement, in English or Bangla, exportable as a self-contained HTML file that prints cleanly to PDF.
+
+A **Dashboard** tab keeps every report fetched in this browser (`lib/history.ts`,
+localStorage, nothing server-side yet) and re-offers both downloads for each one
+without re-fetching. Every download — Excel or brief — is rebuilt fresh from the
+stored figures rather than replayed from a cached blob, so it opens as a real
+working file: the workbook keeps its live `SUM` formulas, the brief is plain
+HTML. Neither is a flattened, read-only snapshot.
 
 ---
 
@@ -108,19 +115,22 @@ The underlying press release reports Dhaka North City Corporation and Dhaka Sout
 
 ```
 app/
-  page.tsx              orchestration and state
+  page.tsx              Report tab: orchestration and state
+  dashboard/page.tsx    Dashboard tab
   layout.tsx            fonts, metadata
   api/report/route.ts   locate → download → extract → assemble
   api/excel/route.ts    workbook generation
   api/analyze/route.ts  management brief
 components/
-  Masthead.tsx          the reproduced government header
+  Masthead.tsx          the reproduced government header, plus tab nav
   DateControl.tsx       date picker and fetch action
   Pipeline.tsx          five-step progress rail
   FigureStrip.tsx       headline figures
   SheetTable.tsx        division table, English/Bangla toggle
   BurdenChart.tsx       Dhaka split and division ranking
   BriefPanel.tsx        management brief and analyse action
+  Dashboard.tsx         saved-report list with re-download actions
+  Footer.tsx            shared data-caveat footer
 lib/
   bengali.ts            numerals, dates, Dhaka timezone
   bijoy.ts              SutonnyMJ dictionary  ← verified against the reference file
@@ -130,6 +140,8 @@ lib/
   ai.ts                 model extraction and brief generation
   excel.ts              workbook writer  ← geometry from the reference file
   export-brief.ts       self-contained HTML brief
+  download.ts           shared Excel-download call, used by Report and Dashboard
+  history.ts            localStorage-backed report history for the Dashboard
   types.ts              domain types, region order
 ```
 

@@ -8,9 +8,11 @@ import { FigureStrip } from '@/components/FigureStrip';
 import { SheetTable } from '@/components/SheetTable';
 import { BurdenChart } from '@/components/BurdenChart';
 import { BriefPanel } from '@/components/BriefPanel';
+import { Footer } from '@/components/Footer';
 import { yesterdayInDhaka } from '@/lib/bengali';
-import { workbookFilename } from '@/lib/filename';
 import { briefToHtml, downloadFile } from '@/lib/export-brief';
+import { downloadExcelFile } from '@/lib/download';
+import { saveBrief, saveReport } from '@/lib/history';
 import type { DengueReport, ManagementBrief, PipelineStep } from '@/lib/types';
 
 const STEPS: { id: PipelineStep['id']; label: string }[] = [
@@ -88,7 +90,11 @@ export default function Page() {
       );
       mark('compose', r.rows.length ? 'done' : 'skipped');
       setReport(r);
-      if (!r.rows.length) setFetchError('The release was downloaded but no figures could be read from it.');
+      if (r.rows.length) {
+        saveReport(r);
+      } else {
+        setFetchError('The release was downloaded but no figures could be read from it.');
+      }
     } catch (e) {
       mark('download', 'failed', e instanceof Error ? e.message : 'Network error.');
       setFetchError('Could not reach the server. Check the connection and try again.');
@@ -102,21 +108,8 @@ export default function Page() {
       if (!report) return;
       setExporting(true);
       try {
-        const res = await fetch('/api/excel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ report, script }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          setFetchError(err.error ?? 'The workbook could not be built.');
-          return;
-        }
-        downloadFile(
-          workbookFilename(report.date),
-          await res.blob(),
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        );
+        const err = await downloadExcelFile(report, script);
+        if (err) setFetchError(err);
       } finally {
         setExporting(false);
       }
@@ -139,7 +132,9 @@ export default function Page() {
         setBriefError(data.error ?? 'The analysis could not be completed.');
         return;
       }
-      setBrief(data as ManagementBrief);
+      const b = data as ManagementBrief;
+      setBrief(b);
+      saveBrief(report.date, b);
     } catch {
       setBriefError('Could not reach the analysis service.');
     } finally {
@@ -274,13 +269,7 @@ export default function Page() {
         </div>
       </main>
 
-      <footer className="mx-auto max-w-[1180px] px-6 pb-8 pt-2">
-        <p className="max-w-[80ch] text-micro leading-relaxed text-muted">
-          Figures are hospitalised cases reported to the DGHS Health Emergency Operation Centre and
-          control room. They are not population incidence and carry no serotype, age or upazila
-          detail. Always verify against the source PDF before the numbers leave this screen.
-        </p>
-      </footer>
+      <Footer />
     </div>
   );
 }
