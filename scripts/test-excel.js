@@ -2,7 +2,7 @@
  * against the reference file NMEP circulates.
  *   npx tsc -p scripts/tsconfig.test.json && node scripts/test-excel.js  */
 const { writeFileSync } = require('node:fs');
-const { buildWorkbook } = require('../.testbuild/lib/excel.js');
+const { buildWorkbook } = require('../.testbuild/lib/excel.js'); // built by scripts/tsconfig.test.json
 
 const REGIONS = ['DHAKA_NORTH_CITY', 'DHAKA_SOUTH_CITY', 'DHAKA_DIVISION', 'MYMENSINGH', 'CHATTOGRAM',
   'KHULNA', 'RAJSHAHI', 'RANGPUR', 'BARISHAL', 'SYLHET'];
