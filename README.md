@@ -28,12 +28,13 @@ stored figures rather than replayed from a cached blob, so it opens as a real
 working file: the workbook keeps its live `SUM` formulas, the brief is plain
 HTML. Neither is a flattened, read-only snapshot.
 
-**"Enter manually"** on the Report tab is a fallback for when the DGHS fetch
-can't be trusted — as of writing, `old.dghs.gov.bd` (the domain this app was
-built against) is unreachable and DGHS's current site shows no active dengue
-press-release series (see `docs/PROGRESS.md`, v1.2.0). Type the day's figures
-in by hand and they flow through the exact same Excel/brief/Dashboard pipeline
-as a successful fetch.
+**"Upload PDF"** on the Report tab is a fallback for when the DGHS fetch can't
+be trusted — as of writing, `old.dghs.gov.bd` (the domain this app was built
+against) is unreachable and DGHS's current site shows no active dengue
+press-release series (see `docs/PROGRESS.md`, v1.2.0 and v1.3.0). Attach the
+day's PDF from wherever it was actually obtained and it runs through the same
+pattern-parser / model-fallback extraction as a live fetch, landing in the
+same Excel/brief/Dashboard pipeline.
 
 ---
 
@@ -125,9 +126,10 @@ app/
   page.tsx              Report tab: orchestration and state
   dashboard/page.tsx    Dashboard tab
   layout.tsx            fonts, metadata
-  api/report/route.ts   locate → download → extract → assemble
-  api/excel/route.ts    workbook generation
-  api/analyze/route.ts  management brief
+  api/report/route.ts        locate → download → extract → assemble
+  api/report/upload/route.ts same extraction, from an uploaded PDF
+  api/excel/route.ts         workbook generation
+  api/analyze/route.ts       management brief
 components/
   Masthead.tsx          the reproduced government header, plus tab nav
   DateControl.tsx       date picker and fetch action
@@ -137,7 +139,7 @@ components/
   BurdenChart.tsx       Dhaka split and division ranking
   BriefPanel.tsx        management brief and analyse action
   Dashboard.tsx         saved-report list with re-download actions
-  ManualEntryForm.tsx   hand-entry fallback when the DGHS fetch can't be trusted
+  UploadPdfForm.tsx     upload-and-analyse fallback when the DGHS fetch can't be trusted
   Footer.tsx            shared data-caveat footer
 lib/
   bengali.ts            numerals, dates, Dhaka timezone

@@ -66,7 +66,7 @@ export interface DengueReport {
   comparison: YearComparison[];
   /** How the numbers were obtained. */
   extraction: {
-    method: 'pattern' | 'model' | 'mixed' | 'manual';
+    method: 'pattern' | 'model' | 'mixed';
     /** 0-1. Below 0.6 the UI shows a "verify before circulating" warning. */
     confidence: number;
     notes: string[];

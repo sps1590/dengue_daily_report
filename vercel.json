@@ -4,6 +4,7 @@
   "regions": ["sin1"],
   "functions": {
     "app/api/report/route.ts": { "maxDuration": 60 },
+    "app/api/report/upload/route.ts": { "maxDuration": 60 },
     "app/api/analyze/route.ts": { "maxDuration": 60 },
     "app/api/excel/route.ts": { "maxDuration": 30 }
   }

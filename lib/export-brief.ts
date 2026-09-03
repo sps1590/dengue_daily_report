@@ -43,7 +43,7 @@ export function briefToHtml(report: DengueReport, brief: ManagementBrief): strin
   footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #D9E0E8; color: #61798F; font-size: 11px; }
 </style>
 <h1>${bn ? 'ডেঙ্গু পরিস্থিতি সংক্ষেপ' : 'Dengue situation brief'}</h1>
-<p class="meta">${esc(toEnglishLongDate(report.date))} · Source: ${esc(report.extraction.method === 'manual' ? 'entered manually' : 'DGHS daily press release')} · Extraction ${(report.extraction.confidence * 100).toFixed(0)}% (${esc(report.extraction.method)})</p>
+<p class="meta">${esc(toEnglishLongDate(report.date))} · Source: ${esc(report.sourceUrl ? 'DGHS daily press release' : 'uploaded PDF')} · Extraction ${(report.extraction.confidence * 100).toFixed(0)}% (${esc(report.extraction.method)})</p>
 
 <p class="lead">${esc(brief.headline)}</p>
 <p>${esc(brief.situation)}</p>

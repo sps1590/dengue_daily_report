@@ -6,6 +6,45 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-03 — v1.3.0, replace hand-entry with PDF upload
+
+### What changed
+
+The client wanted the DGHS-fetch fallback to be an actual PDF upload, not a
+60-field number-entry form: "we will upload the files (PDF) then the app will
+analyze the data." Replaced it:
+
+- `app/api/report/upload/route.ts` — the same extraction pipeline as
+  `/api/report` (`extractPdfText` → `parseReportText` → model fallback below
+  60% confidence), except the PDF comes from a client upload
+  (`multipart/form-data`, fields `date` and `file`) instead of a fetch. Same
+  validity check (`%PDF-` magic bytes), same confidence scoring, same notes
+  format — the client can't tell the two apart except by `sourceLabel`.
+- `components/UploadPdfForm.tsx` replaces `components/ManualEntryForm.tsx`
+  (deleted). Date picker, a click-to-choose PDF dropzone, "Analyse PDF". The
+  Report tab's mode toggle is now "Fetch from DGHS" / "Upload PDF".
+- `app/page.tsx`'s `runUpload` mirrors `runFetch`'s state handling
+  (clears brief, sets `report`, saves to history on success) but posts
+  `FormData` instead of JSON and skips the pipeline rail, since there's
+  nothing to locate or download.
+- Removed `extraction.method: 'manual'` from `lib/types.ts` — uploaded PDFs
+  get real `pattern`/`model`/`mixed` methods from actual extraction, so the
+  synthetic "manual, 100% confidence" tag from the old hand-entry form no
+  longer has a caller. Cleaned up the one place that branched on it
+  (`lib/export-brief.ts`'s brief footer now checks `report.sourceUrl` instead).
+- `vercel.json` — added `maxDuration: 60` for the new route (matches
+  `/api/report`, since the model fallback can take a while).
+
+### Verified
+
+| What | How | Result |
+|---|---|---|
+| Pattern extraction from an upload | Hand-built a minimal PDF (`%PDF-1.4`, one content stream, no external deps available in the sandbox) with all 10 region rows, a total row, and both comparison-table years, `curl`-posted to `/api/report/upload` | 200, all 10 regions matched, totals matched the sheet's own total row exactly (no mismatch note), both comparison years parsed, confidence 100% |
+| Error paths | No file, non-PDF file, implausible date | Clean 400s: `Attach the PDF as "file".` / `That file does not look like a PDF.` / `Pick a date between 01 January 2023 and today.` |
+| Full UI flow | Ran a clean dev server, uploaded the same test PDF through the real file input (Chrome automation, not a mocked fetch), clicked Analyse | Figure strip, division table, both charts all rendered with the correct numbers |
+| Dashboard save | Checked the Dashboard tab after the upload | Entry saved with a `100% · pattern` badge (real extraction, not the old synthetic `manual` tag), correct totals, both Excel buttons |
+| `npm run typecheck` / `npm run build` | — | Clean; new `/api/report/upload` route listed alongside the others |
+
 ## 2026-09-03 — v1.2.0, manual entry fallback; the DGHS source is not what it was built against
 
 ### What was found

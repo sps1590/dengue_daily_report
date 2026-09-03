@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Masthead } from '@/components/Masthead';
 import { DateControl } from '@/components/DateControl';
-import { ManualEntryForm } from '@/components/ManualEntryForm';
+import { UploadPdfForm } from '@/components/UploadPdfForm';
 import { Pipeline } from '@/components/Pipeline';
 import { FigureStrip } from '@/components/FigureStrip';
 import { SheetTable } from '@/components/SheetTable';
@@ -31,7 +31,8 @@ export default function Page() {
   }, []);
 
   const [date, setDate] = useState(yesterdayInDhaka);
-  const [mode, setMode] = useState<'fetch' | 'manual'>('fetch');
+  const [mode, setMode] = useState<'fetch' | 'upload'>('fetch');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [report, setReport] = useState<DengueReport | null>(null);
   const [steps, setSteps] = useState<PipelineStep[]>(
     STEPS.map((s) => ({ ...s, state: 'pending' })),
@@ -105,13 +106,39 @@ export default function Page() {
     }
   }, [date, mark]);
 
-  const handleManualSubmit = useCallback((r: DengueReport) => {
+  const runUpload = useCallback(async () => {
+    if (!uploadFile) return;
+    setFetching(true);
     setFetchError(null);
+    setReport(null);
     setBrief(null);
     setBriefError(null);
-    setReport(r);
-    saveReport(r);
-  }, []);
+
+    try {
+      const form = new FormData();
+      form.append('date', date);
+      form.append('file', uploadFile);
+      const res = await fetch('/api/report/upload', { method: 'POST', body: form });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setFetchError(data.error ?? 'Could not process this file.');
+        return;
+      }
+
+      const r = data as DengueReport;
+      setReport(r);
+      if (r.rows.length) {
+        saveReport(r);
+      } else {
+        setFetchError('The PDF was read but no figures could be found in it.');
+      }
+    } catch {
+      setFetchError('Could not reach the server. Check the connection and try again.');
+    } finally {
+      setFetching(false);
+    }
+  }, [date, uploadFile]);
 
   const downloadExcel = useCallback(
     async (script: 'legacy' | 'unicode') => {
@@ -161,7 +188,7 @@ export default function Page() {
       <main className="mx-auto grid max-w-[1180px] gap-5 px-6 py-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
           <div className="flex gap-1 rounded-sheet border border-rule bg-card p-0.5 shadow-panel">
-            {(['fetch', 'manual'] as const).map((m) => (
+            {(['fetch', 'upload'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
@@ -170,7 +197,7 @@ export default function Page() {
                   mode === m ? 'bg-signal text-white' : 'text-muted hover:text-ink'
                 }`}
               >
-                {m === 'fetch' ? 'Fetch from DGHS' : 'Enter manually'}
+                {m === 'fetch' ? 'Fetch from DGHS' : 'Upload PDF'}
               </button>
             ))}
           </div>
@@ -187,12 +214,14 @@ export default function Page() {
               <Pipeline steps={steps} />
             </>
           ) : (
-            <ManualEntryForm
+            <UploadPdfForm
               date={date}
               onDateChange={setDate}
               maxDate={today}
-              initialReport={report}
-              onSubmit={handleManualSubmit}
+              file={uploadFile}
+              onFileChange={setUploadFile}
+              onAnalyze={runUpload}
+              busy={fetching}
             />
           )}
 
@@ -239,11 +268,15 @@ export default function Page() {
         <div className="space-y-5">
           {fetchError && (
             <div className="rounded-panel border border-alert/25 bg-alert-wash px-5 py-4">
-              <p className="text-sm font-semibold text-alert">This date did not produce a report</p>
-              <p className="mt-1 max-w-[70ch] text-[13px] leading-relaxed text-ink/80">{fetchError}</p>
-              <p className="mt-2 text-micro text-muted">
-                Releases usually appear the morning after the reporting day. Try the previous date.
+              <p className="text-sm font-semibold text-alert">
+                {mode === 'upload' ? 'This file did not produce a report' : 'This date did not produce a report'}
               </p>
+              <p className="mt-1 max-w-[70ch] text-[13px] leading-relaxed text-ink/80">{fetchError}</p>
+              {mode === 'fetch' && (
+                <p className="mt-2 text-micro text-muted">
+                  Releases usually appear the morning after the reporting day. Try the previous date.
+                </p>
+              )}
             </div>
           )}
 
@@ -253,7 +286,17 @@ export default function Page() {
               <p className="mx-auto mt-1.5 max-w-[52ch] text-[13px] leading-relaxed text-muted">
                 The report is read straight from the DGHS press release for that day, turned into the
                 NMEP workbook, and can then be analysed for management. If the fetch can&apos;t reach
-                DGHS, switch to &quot;Enter manually&quot; on the left.
+                DGHS, switch to &quot;Upload PDF&quot; on the left and attach the release yourself.
+              </p>
+            </div>
+          )}
+
+          {!report && !fetchError && mode === 'upload' && (
+            <div className="rounded-panel bg-card px-6 py-10 text-center shadow-panel">
+              <p className="text-sm font-semibold">Attach the press release and analyse it</p>
+              <p className="mx-auto mt-1.5 max-w-[52ch] text-[13px] leading-relaxed text-muted">
+                Pick the date it covers and choose the PDF file on the left. It&apos;s read with the same
+                parser and model fallback as a live fetch, and produces the same workbook and brief.
               </p>
             </div>
           )}
@@ -263,7 +306,7 @@ export default function Page() {
               <p className="text-[13px] font-semibold text-amber">Verify before circulating</p>
               <p className="mt-1 max-w-[72ch] text-[13px] leading-relaxed text-ink/80">
                 Only {(report.extraction.confidence * 100).toFixed(0)}% of the table was recognised.
-                Open the source PDF and check the figures against it.
+                Check the figures against the source PDF before circulating.
               </p>
             </div>
           )}
