@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-paper text-ink;
+  }
+
+  /* Every figure in this app sits in a column that has to line up. */
+  table,
+  .figures {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.signal.DEFAULT');
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* The on-screen reconstruction of the government sheet. Square corners and
+     hairline rules, because that is what the printed form looks like. */
+  .sheet-table {
+    @apply w-full border-collapse text-[13px];
+  }
+  .sheet-table th,
+  .sheet-table td {
+    @apply border border-rule px-2 py-1.5 align-middle;
+  }
+  .sheet-table thead th {
+    @apply bg-signal-wash text-ink font-semibold;
+  }
+  .sheet-table tbody tr:last-child td {
+    @apply font-semibold bg-paper;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
