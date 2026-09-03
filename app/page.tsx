@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Masthead } from '@/components/Masthead';
 import { DateControl } from '@/components/DateControl';
+import { ManualEntryForm } from '@/components/ManualEntryForm';
 import { Pipeline } from '@/components/Pipeline';
 import { FigureStrip } from '@/components/FigureStrip';
 import { SheetTable } from '@/components/SheetTable';
@@ -30,6 +31,7 @@ export default function Page() {
   }, []);
 
   const [date, setDate] = useState(yesterdayInDhaka);
+  const [mode, setMode] = useState<'fetch' | 'manual'>('fetch');
   const [report, setReport] = useState<DengueReport | null>(null);
   const [steps, setSteps] = useState<PipelineStep[]>(
     STEPS.map((s) => ({ ...s, state: 'pending' })),
@@ -103,6 +105,14 @@ export default function Page() {
     }
   }, [date, mark]);
 
+  const handleManualSubmit = useCallback((r: DengueReport) => {
+    setFetchError(null);
+    setBrief(null);
+    setBriefError(null);
+    setReport(r);
+    saveReport(r);
+  }, []);
+
   const downloadExcel = useCallback(
     async (script: 'legacy' | 'unicode') => {
       if (!report) return;
@@ -150,14 +160,41 @@ export default function Page() {
 
       <main className="mx-auto grid max-w-[1180px] gap-5 px-6 py-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
-          <DateControl
-            date={date}
-            onDateChange={setDate}
-            onFetch={runFetch}
-            busy={fetching}
-            maxDate={today}
-          />
-          <Pipeline steps={steps} />
+          <div className="flex gap-1 rounded-sheet border border-rule bg-card p-0.5 shadow-panel">
+            {(['fetch', 'manual'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`flex-1 rounded-[2px] px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                  mode === m ? 'bg-signal text-white' : 'text-muted hover:text-ink'
+                }`}
+              >
+                {m === 'fetch' ? 'Fetch from DGHS' : 'Enter manually'}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'fetch' ? (
+            <>
+              <DateControl
+                date={date}
+                onDateChange={setDate}
+                onFetch={runFetch}
+                busy={fetching}
+                maxDate={today}
+              />
+              <Pipeline steps={steps} />
+            </>
+          ) : (
+            <ManualEntryForm
+              date={date}
+              onDateChange={setDate}
+              maxDate={today}
+              initialReport={report}
+              onSubmit={handleManualSubmit}
+            />
+          )}
 
           {report && (
             <section className="rounded-panel bg-card p-5 shadow-panel">
@@ -185,14 +222,16 @@ export default function Page() {
                 The SutonnyMJ version matches the circulated file byte for byte but needs that font
                 installed. The Unicode version reads correctly anywhere.
               </p>
-              <a
-                href={report.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-3 block text-[13px] text-signal underline underline-offset-2 hover:text-signal-deep"
-              >
-                Open the original DGHS PDF
-              </a>
+              {report.sourceUrl && (
+                <a
+                  href={report.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 block text-[13px] text-signal underline underline-offset-2 hover:text-signal-deep"
+                >
+                  Open the original source
+                </a>
+              )}
             </section>
           )}
         </div>
@@ -208,12 +247,13 @@ export default function Page() {
             </div>
           )}
 
-          {!report && !fetchError && (
+          {!report && !fetchError && mode === 'fetch' && (
             <div className="rounded-panel bg-card px-6 py-10 text-center shadow-panel">
               <p className="text-sm font-semibold">Pick a date and fetch the release</p>
               <p className="mx-auto mt-1.5 max-w-[52ch] text-[13px] leading-relaxed text-muted">
                 The report is read straight from the DGHS press release for that day, turned into the
-                NMEP workbook, and can then be analysed for management.
+                NMEP workbook, and can then be analysed for management. If the fetch can&apos;t reach
+                DGHS, switch to &quot;Enter manually&quot; on the left.
               </p>
             </div>
           )}

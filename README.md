@@ -28,6 +28,13 @@ stored figures rather than replayed from a cached blob, so it opens as a real
 working file: the workbook keeps its live `SUM` formulas, the brief is plain
 HTML. Neither is a flattened, read-only snapshot.
 
+**"Enter manually"** on the Report tab is a fallback for when the DGHS fetch
+can't be trusted — as of writing, `old.dghs.gov.bd` (the domain this app was
+built against) is unreachable and DGHS's current site shows no active dengue
+press-release series (see `docs/PROGRESS.md`, v1.2.0). Type the day's figures
+in by hand and they flow through the exact same Excel/brief/Dashboard pipeline
+as a successful fetch.
+
 ---
 
 ## The Excel export
@@ -130,6 +137,7 @@ components/
   BurdenChart.tsx       Dhaka split and division ranking
   BriefPanel.tsx        management brief and analyse action
   Dashboard.tsx         saved-report list with re-download actions
+  ManualEntryForm.tsx   hand-entry fallback when the DGHS fetch can't be trusted
   Footer.tsx            shared data-caveat footer
 lib/
   bengali.ts            numerals, dates, Dhaka timezone

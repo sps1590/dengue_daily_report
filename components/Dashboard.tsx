@@ -173,14 +173,16 @@ export function Dashboard() {
                     No brief yet — generate one from the Report tab.
                   </span>
                 )}
-                <a
-                  href={entry.report.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ml-auto text-micro text-signal underline underline-offset-2 hover:text-signal-deep"
-                >
-                  Source PDF
-                </a>
+                {entry.report.sourceUrl && (
+                  <a
+                    href={entry.report.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-auto text-micro text-signal underline underline-offset-2 hover:text-signal-deep"
+                  >
+                    Source
+                  </a>
+                )}
               </div>
 
               {entry.report.rows.length > 0 && (

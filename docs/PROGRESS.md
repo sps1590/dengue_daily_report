@@ -6,6 +6,74 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-03 — v1.2.0, manual entry fallback; the DGHS source is not what it was built against
+
+### What was found
+
+The client reported "Download the PDF" failing on the live deployment. Investigated
+properly instead of repeating the earlier "DGHS blocks bots" assumption from the
+initial build (which was never actually verified against a live server — see the
+v1.0.0 entry below):
+
+- **`old.dghs.gov.bd` — the domain this entire app targets — times out at the TCP
+  level.** DNS resolves (`103.247.238.22`), but the connection never completes,
+  from both a local sandbox and Vercel's `sin1` region. This is not a robots.txt
+  block; the subdomain looks dead or firewalled off entirely.
+- **DGHS's current site (`dghs.gov.bd`, no `old.`) is alive** and has a modern
+  press-releases system (`/pages/press-releases`, ~155 entries, paginated,
+  search box that actually filters). As of the date checked, the daily
+  disease-surveillance bulletin being published there is **হাম প্রেস রিলিজ —
+  measles**, not dengue.
+- Searching that system's own press-release search for **ডেঙ্গু (dengue) returned
+  zero results.** No dengue press release exists anywhere in DGHS's current
+  content system under that name, as far as this check could tell.
+
+**Conclusion:** there is no code bug to fix in `lib/dghs.ts` — the URL pattern it
+targets (`old.dghs.gov.bd/images/docs/vpr/YYYYMMDD_dengue_all.pdf`) points at
+infrastructure that is either gone or has moved, and the daily dengue series
+under that name does not currently exist to be found. This was flagged to the
+client rather than silently worked around.
+
+### What was built
+
+Per the client's choice, added a **manual entry fallback** rather than guessing
+at a replacement URL:
+
+- `components/ManualEntryForm.tsx` — a "Enter manually" mode on the Report tab
+  (toggle next to "Fetch from DGHS"), with the same 10-region × 6-figure grid as
+  the sheet, a live-updating total row, and optional source-note/source-link
+  fields for citing wherever the figures actually came from that day.
+- The resulting `DengueReport` is tagged `extraction.method: 'manual'`,
+  `confidence: 1`, and flows through the exact same `report` state as a
+  successful fetch — Excel export, the brief, the Dashboard, all unchanged.
+  Nothing downstream needed to know the numbers didn't come off a PDF.
+- `lib/types.ts` — `extraction.method` gained `'manual'` alongside `pattern` /
+  `model` / `mixed`.
+- Manual entries can leave `sourceUrl` blank (there may be no single URL for a
+  phoned-in or press-briefing figure). Every place that previously rendered
+  `report.sourceUrl` unconditionally — the Report tab's "Open the original…"
+  link, the Dashboard's per-entry "Source" link, the brief's HTML export — now
+  guards on it being non-empty instead of rendering a dead link.
+
+### Verified
+
+| What | How | Result |
+|---|---|---|
+| `old.dghs.gov.bd` reachability | `curl` from sandbox with a 15s timeout, both `http://` and `https://` | Connection timed out both times; `dghs.gov.bd` (no `old.`) and a control site (`google.com`) both responded in under 1s from the same network |
+| DGHS's current press-release search | Typed "ডেঙ্গু" into the live site's own search box | "কোনো তথ্য পাওয়া যায়নি" — no results |
+| `npm run typecheck` / `npm run build` | — | Clean; `/dashboard` route unaffected |
+| Manual entry → full report UI | Filled 2 of 10 regions in a running dev server, submitted | Figure strip, division table, both charts and the extraction log all rendered correctly; unfilled regions show `—` |
+| Manual entry → Excel export | Clicked both script buttons against the populated report | `POST /api/excel` → 200 for both `legacy` and `unicode` |
+| Manual entry → Dashboard | Same entry, checked the Dashboard tab | Shows `100% · manual` badge, correct aggregated totals, "Source" link correctly hidden when no URL was given |
+
+### Open question for the client
+
+Where do the day's dengue figures actually come from right now, if not
+`old.dghs.gov.bd`? If there is a current URL (a different DGHS page, a PDF
+posted elsewhere, an API), `lib/dghs.ts` and `lib/parse.ts` can be rewired to
+it in the same shape as before. Until then, the manual entry form is the
+supported path.
+
 ## 2026-09-03 — v1.1.0, Dashboard tab, repo rename to `dengue_daily_report`
 
 ### What changed
