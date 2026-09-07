@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isPlausibleReportDate } from '@/lib/bengali';
 import { extractPdfText } from '@/lib/pdf';
-import { parseReportText, sumRows } from '@/lib/parse';
+import { parseBiPressRelease, parseReportText, sumRows } from '@/lib/parse';
 import { extractWithModel, hasModelAccess } from '@/lib/ai';
 import type { DengueReport } from '@/lib/types';
 
@@ -52,7 +52,8 @@ export async function POST(req: Request) {
 
     const { text, pages, looksScanned } = await extractPdfText(bytes);
 
-    const pattern = parseReportText(text, year);
+    const bi = parseBiPressRelease(text, year);
+    const pattern = bi.rows.length ? bi : parseReportText(text, year);
     const notes = ['Uploaded manually; not fetched from DGHS.', ...pattern.notes];
     if (looksScanned) notes.push(`The PDF has almost no text layer (${pages} page(s)); it is probably a scan.`);
 

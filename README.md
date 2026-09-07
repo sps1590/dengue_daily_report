@@ -10,31 +10,39 @@ Pick a date. The app finds that day's press release on the DGHS portal, reads th
 
 | Step | What happens |
 |---|---|
-| 1 | The chosen date becomes the Bengali label DGHS uses (`০২/০৯/২০২৬`) and the ASCII filename stem (`20260902`) |
-| 2 | The DGHS index page is checked to confirm the release exists |
-| 3 | The PDF is downloaded and validated (a Joomla error page served with a 200 is caught here) |
-| 4 | The division table and the year-comparison table are read out of the text layer |
-| 5 | Figures, charts, the Excel export and the brief become available |
+| 1 | DGHS's dengue-press-release listing (`dghs.gov.bd/pages/miscellaneous-infos`, filtered to that category) is fetched and scanned for a row matching the chosen date |
+| 2 | That row's own attached PDF link is downloaded and validated |
+| 3 | The PDF — a BI-dashboard export, not a plain table — is parsed: per-division chart figures matched by position, national totals read directly (see `lib/parse.ts`'s `parseBiPressRelease`) |
+| 4 | Below 60% confidence, or on an unrecognised layout, the model re-reads the attached PDF |
+| 5 | Figures, charts, the Excel export, the official-report replica and the brief all become available |
 
-Two outputs:
+Three outputs:
 
 - **Excel** — the government sheet, in either legacy SutonnyMJ or Unicode Bangla.
-- **Management brief** — interpretation rather than restatement, in English or Bangla, exportable as a self-contained HTML file that prints cleanly to PDF.
+- **Official report** — an on-screen, pixel-faithful reproduction of the sheet NMEP circulates (peach header shading, black cell borders, the exact eight rows serial ২–৯), downloadable as a self-contained HTML file that prints to one A4 page with colours intact.
+- **Management brief** — interpretation rather than restatement, in English or Bangla, exportable the same way.
 
 A **Dashboard** tab keeps every report fetched in this browser (`lib/history.ts`,
 localStorage, nothing server-side yet) and re-offers both downloads for each one
-without re-fetching. Every download — Excel or brief — is rebuilt fresh from the
-stored figures rather than replayed from a cached blob, so it opens as a real
-working file: the workbook keeps its live `SUM` formulas, the brief is plain
-HTML. Neither is a flattened, read-only snapshot.
+without re-fetching. Every download — Excel, official report, or brief — is
+rebuilt fresh from the stored figures rather than replayed from a cached blob,
+so it opens as a real working file: the workbook keeps its live `SUM`
+formulas, the reports are plain HTML. None of them is a flattened, read-only
+snapshot.
 
-**"Upload PDF"** on the Report tab is a fallback for when the DGHS fetch can't
-be trusted — as of writing, `old.dghs.gov.bd` (the domain this app was built
-against) is unreachable and DGHS's current site shows no active dengue
-press-release series (see `docs/PROGRESS.md`, v1.2.0 and v1.3.0). Attach the
-day's PDF from wherever it was actually obtained and it runs through the same
-pattern-parser / model-fallback extraction as a live fetch, landing in the
-same Excel/brief/Dashboard pipeline.
+**"Upload PDF"** on the Report tab is a fallback for when the fetch can't reach
+DGHS. Attach the day's PDF from wherever it was actually obtained and it runs
+through the same extraction as a live fetch, landing in the same
+Excel/report/brief/Dashboard pipeline.
+
+### A real data-availability limit, not a bug
+
+DGHS's current press release publishes admissions and deaths per division —
+both in the last 24 hours and cumulative since 01 January — but **not**
+discharges or "currently admitted" broken down by division, only as national
+totals. Every division row therefore shows `—` in those two columns; the
+totals row shows the real national figures instead of a sum of blanks. See
+`docs/PROGRESS.md` (v1.4.0) for what was checked before settling on this.
 
 ---
 
@@ -136,6 +144,7 @@ components/
   Pipeline.tsx          five-step progress rail
   FigureStrip.tsx       headline figures
   SheetTable.tsx        division table, English/Bangla toggle
+  OfficialReport.tsx    exact-match sheet replica, plus its own Download Report
   BurdenChart.tsx       Dhaka split and division ranking
   BriefPanel.tsx        management brief and analyse action
   Dashboard.tsx         saved-report list with re-download actions
@@ -144,10 +153,11 @@ components/
 lib/
   bengali.ts            numerals, dates, Dhaka timezone
   bijoy.ts              SutonnyMJ dictionary  ← verified against the reference file
-  dghs.ts               URL derivation, index check, download
+  dghs.ts               listing scrape, PDF download
   pdf.ts                text extraction (unpdf)
-  parse.ts              pattern parser and confidence scoring
+  parse.ts              legacy table parser + parseBiPressRelease for the current export format
   ai.ts                 model extraction and brief generation
+  export-official-report.ts  official-report HTML export, shared with the on-screen component
   excel.ts              workbook writer  ← geometry from the reference file
   export-brief.ts       self-contained HTML brief
   download.ts           shared Excel-download call, used by Report and Dashboard

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { isPlausibleReportDate } from '@/lib/bengali';
 import { NotPublishedError, downloadPdf, locateRelease } from '@/lib/dghs';
 import { extractPdfText } from '@/lib/pdf';
-import { parseReportText, sumRows } from '@/lib/parse';
+import { parseBiPressRelease, parseReportText, sumRows } from '@/lib/parse';
 import { extractWithModel, hasModelAccess } from '@/lib/ai';
 import type { DengueReport } from '@/lib/types';
 
@@ -36,7 +36,11 @@ export async function POST(req: Request) {
     const pdf = await downloadPdf(located.url);
     const { text, pages, looksScanned } = await extractPdfText(pdf.bytes);
 
-    const pattern = parseReportText(text, year);
+    // DGHS's current export is a BI-dashboard PDF, not the plain table the
+    // legacy parser was built for. Try the BI parser first; fall back to the
+    // legacy one for an archived/older-format PDF that happens to reach here.
+    const bi = parseBiPressRelease(text, year);
+    const pattern = bi.rows.length ? bi : parseReportText(text, year);
     const notes = [located.note, ...pattern.notes];
     if (looksScanned) notes.push(`The PDF has almost no text layer (${pages} page(s)); it is probably a scan.`);
 

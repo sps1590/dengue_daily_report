@@ -6,6 +6,101 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.4.0, real working data source, official-report replica, print export
+
+### The new source
+
+The client pointed at a specific URL:
+`https://dghs.gov.bd/pages/miscellaneous-infos?filters={"miscellaneous_info_type":"6a9cf0471fa8cd87d1f50227"}`
+— DGHS's current site, filtered to the dengue-press-release category. Checked
+it directly before writing any code against it (the previous "old.dghs.gov.bd
+is dead" finding was itself the result of not doing this the first time):
+
+- The listing is a small, server-rendered HTML table — no client-side
+  rendering to fight. Each row already carries a direct link to that day's
+  PDF in its own `files` column; no second "detail page" fetch is needed.
+- The PDF itself is a **BI-dashboard export** (10 pages, English labels,
+  numbers as chart data-labels), not the plain Bangla table the original
+  `parseReportText` was built to read. Two quirks make it parseable anyway:
+  each chart value is text-extracted as three back-to-back copies of itself
+  with no separator (`137137137` = 137 — an SVG-text-layer artifact, not
+  intentional obfuscation), and zero-value bars are dropped from the chart
+  entirely rather than shown as zero, so a chart's value list and its label
+  list are always the same length and in the same order as each other, just
+  not always length 10.
+- **Per-division discharge and "currently admitted" figures do not exist in
+  this document at all** — only as national totals. Confirmed by reading the
+  full extracted text, not by assumption. The client's own example of a
+  richer hospital-level breakdown (govt/private split, per-institution rows)
+  turned out to be an illustration of the desired shape, not a reachable
+  source (it would be DHIS2, a different, authenticated system) — confirmed
+  with the client directly before building anything against it.
+- The client's reference image confirmed something the original build had
+  flagged as an open question and left unresolved: the sheet genuinely uses
+  **eight division rows, serial ২–৯**, with no Dhaka City Corporation row at
+  all — not the ten-row structure this app had defaulted to building.
+
+### What was built
+
+- `lib/dghs.ts` — rewritten. `fetchListing()` regex-parses the listing table
+  (title, publish date, PDF href) in one pass; `locateRelease(iso)` finds the
+  row for a date. `old.dghs.gov.bd` and every URL-derivation helper built
+  around it are gone.
+- `lib/parse.ts` — added `parseBiPressRelease()`: `detriple()` decodes the
+  repeated-digit chart labels; `chartValuesByArea()` matches a chart's values
+  to whichever region names actually appear in it, by position, not by a
+  fixed slot; national totals (admitted/deaths, 24h and cumulative,
+  discharged) are read directly; "currently admitted" nationally is derived
+  as `totalAdmitted − totalDeaths − discharged` — the same arithmetic the
+  source's own per-hospital tables use, verified against a real sample
+  (1,551 − 22 − 1,457 = 72, exactly). Per-division discharged/currentlyAdmitted
+  are left `null`, not guessed.
+- Both `/api/report` and `/api/report/upload` try the BI parser first and
+  fall back to the legacy line-matcher for an old-format PDF that happens to
+  reach either route.
+- `components/OfficialReport.tsx` + `lib/export-official-report.ts` — the
+  eight-row replica (peach `#fce4d6` header, `1px solid #000` borders,
+  Kalpurush/SolaimanLipi-first font stack), reusing the *already-verified*
+  `lib/bijoy.ts` dictionary and its `cumulativeHeader`/`comparisonHeading`/
+  `periodLabel` helpers — the same ones the Excel writer uses — so the wording
+  is guaranteed to match rather than being retyped and risking drift. The
+  totals row sums the eight shown rows for admitted/deaths (real, since every
+  row has real data there) but uses the true national figures for
+  discharged/currentlyAdmitted (since summing eight `null`s would render as
+  zero, which is false, not just imprecise). The 2025 comparison row is
+  honestly `—` — there is no live source for a prior-year, same-window total,
+  and hardcoding one fixed number would be correct today and silently wrong
+  every other day. The signature is styled cursive text ("Anahar", the
+  `Caveat` Google Font), not an image — the client's reference turned out to
+  be exactly that, rendered text, once the actual image arrived.
+- "Download Report" downloads a self-contained HTML file
+  (`@page { size: A4 }`, `-webkit-print-color-adjust: exact`) rather than
+  opening a new tab and calling `window.print()` — the latter was tried
+  first and silently swallowed by popup blocking (observed even from a
+  direct button click in an automated browser; not worth the risk for real
+  users either). Matches the download-based pattern `lib/export-brief.ts`
+  already established for the management brief.
+
+### Verified
+
+| What | How | Result |
+|---|---|---|
+| Listing scrape | `curl` the listing URL directly, regex-check row structure | Server-rendered HTML, one row for `০৬/০৯/২০২৬` with a direct `.pdf` link in its own cell |
+| BI parser against the real, live PDF | Extracted text with `unpdf`, ran the parser's logic standalone against it | All 10 areas' admitted24h summed to the national total exactly (1,558); all 10 areas' cumulative admitted summed to 42,590 exactly; cumulative deaths summed to 117 exactly; the 2-area-only deaths-24h chart (zero-suppressed) summed to 4, matching the national annotation |
+| Full fetch pipeline, live | `POST /api/report` against the real listing on a running dev server | 200, 10 rows, 95% confidence, correct national totals, honest notes about the two missing per-division fields |
+| Official report, on-screen | Fetched the live report in a browser, inspected rendered text | Every cell matches: 8 rows serial ২–৯, totals row sums correctly, comparison table shows real 2026 cumulative figures and an honest `—` for 2025 |
+| Official report, exported HTML | Captured the actual downloaded blob content via an intercepted anchor click, rendered it standalone | Identical to the on-screen version; peach headers and borders render correctly; `Caveat` signature font loads from its own `<link>` (the standalone file has no other font links, unlike the live app) |
+| Excel export with the new null-per-row shape | `POST /api/excel` with a live-fetched report containing `discharged: null` rows | 200, valid `.xlsx` — the writer already handled `null` cells, no change needed |
+| `npm run typecheck` / `npm run build` | — | Clean |
+
+### Open question for the client
+
+If a source ever surfaces for real per-division discharged and
+currently-admitted figures (a DHIS2 export you have access to, a different
+DGHS page), point `lib/parse.ts`'s `parseBiPressRelease` at it and those two
+columns stop being `—`. Until then, this is a real gap in what DGHS publishes
+per division, not a parsing shortfall.
+
 ## 2026-09-03 — v1.3.0, replace hand-entry with PDF upload
 
 ### What changed

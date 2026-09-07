@@ -7,6 +7,7 @@ import { UploadPdfForm } from '@/components/UploadPdfForm';
 import { Pipeline } from '@/components/Pipeline';
 import { FigureStrip } from '@/components/FigureStrip';
 import { SheetTable } from '@/components/SheetTable';
+import { OfficialReport } from '@/components/OfficialReport';
 import { BurdenChart } from '@/components/BurdenChart';
 import { BriefPanel } from '@/components/BriefPanel';
 import { Footer } from '@/components/Footer';
@@ -315,6 +316,7 @@ export default function Page() {
             <>
               <FigureStrip report={report} />
               <SheetTable report={report} />
+              <OfficialReport report={report} />
               <BurdenChart report={report} />
               <BriefPanel
                 brief={brief}
