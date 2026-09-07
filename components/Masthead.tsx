@@ -8,6 +8,7 @@ import { toBengaliLongDate, toEnglishLongDate } from '@/lib/bengali';
 const NAV = [
   { href: '/', label: 'Report' },
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/analysis', label: 'Advanced Analysis' },
 ] as const;
 
 /**

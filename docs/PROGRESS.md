@@ -6,6 +6,48 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.6.0, Advanced Analysis tab
+
+### What was asked
+
+"a tab/button/option for advance calculation where it will show a detailed
+visualization report with the data visible in the graphs, charts, maps, and
+other visualization tools."
+
+### What was built
+
+A single day's press release can't show a trend — there's nothing to trend
+against. So `components/AdvancedAnalysis.tsx` reads the *same* local
+history the Dashboard already keeps (`lib/history.ts`, every date fetched or
+uploaded in this browser) and builds from however many dates are actually
+saved:
+
+- `TrendCharts.tsx` — three `recharts` charts across every saved date:
+  admissions in the last 24 hours (area), deaths in the last 24 hours
+  (line), cumulative admissions since 01 January (area). All degrade
+  gracefully to a single point with an explanatory banner rather than
+  breaking when only one date is saved.
+- `DivisionShare.tsx` — a donut chart of the most recent date's admissions,
+  split by reporting unit.
+- `DivisionMap.tsx` — **not** a real geographic map: there's no boundary
+  data in this app to draw one accurately, and a wrong border is worse than
+  an honest diagram. It's a tile grid in the reporting units' rough relative
+  position (north at the top, DNCC/DSCC stacked under Dhaka Division since
+  they sit inside it), each tile shaded by a blue intensity scale for that
+  unit's 24h admissions, labelled "schematic layout — not to scale" so
+  nobody mistakes it for a survey.
+- New third nav tab, "Advanced Analysis" (`app/analysis/page.tsx`), next to
+  Report and Dashboard.
+
+### Verified
+
+| What | How | Result |
+|---|---|---|
+| Empty state | Cleared localStorage, loaded the tab | Clean "no data yet" card, no crash |
+| Single-date state | Seeded exactly one history entry | Amber "only one date saved" banner; charts render a single point instead of erroring |
+| Multi-date trend | Seeded five synthetic dates with a rising admissions curve | All three trend charts plotted the correct shape in date order; donut and map reflected the latest date only |
+| `npm run typecheck` / `npm run build` | — | Clean; new `/analysis` route listed |
+
 ## 2026-09-08 — v1.5.0, four real download formats; fixed a totals mismatch
 
 ### Two client requests

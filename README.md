@@ -22,6 +22,13 @@ Three outputs:
 - **Official report** — an on-screen, pixel-faithful reproduction of the sheet NMEP circulates (peach header shading, black cell borders, the exact eight rows serial ২–৯), downloadable as an **Image (PNG)**, a **PDF**, an **Excel** workbook, or a **Word** document — pick one from the "Download Report" menu.
 - **Management brief** — interpretation rather than restatement, in English or Bangla, exportable the same way.
 
+An **Advanced Analysis** tab turns every report saved to this browser into
+trend charts (admissions and deaths over time, cumulative admissions —
+things a single day's press release can't show on its own), a division-share
+donut chart, and a schematic map of the reporting units coloured by
+admissions intensity. It reads the same local history as the Dashboard, so
+it fills in as you fetch more dates rather than needing its own data source.
+
 A **Dashboard** tab keeps every report fetched in this browser (`lib/history.ts`,
 localStorage, nothing server-side yet) and re-offers both downloads for each one
 without re-fetching. Every download — Excel, official report, or brief — is
@@ -133,11 +140,13 @@ The underlying press release reports Dhaka North City Corporation and Dhaka Sout
 app/
   page.tsx              Report tab: orchestration and state
   dashboard/page.tsx    Dashboard tab
+  analysis/page.tsx     Advanced Analysis tab
   layout.tsx            fonts, metadata
-  api/report/route.ts        locate → download → extract → assemble
-  api/report/upload/route.ts same extraction, from an uploaded PDF
-  api/excel/route.ts         workbook generation
-  api/analyze/route.ts       management brief
+  api/report/route.ts             locate → download → extract → assemble
+  api/report/upload/route.ts      same extraction, from an uploaded PDF
+  api/report/official-excel/route.ts  official-report workbook
+  api/excel/route.ts              NMEP workbook generation
+  api/analyze/route.ts            management brief
 components/
   Masthead.tsx          the reproduced government header, plus tab nav
   DateControl.tsx       date picker and fetch action
@@ -148,6 +157,10 @@ components/
   BurdenChart.tsx       Dhaka split and division ranking
   BriefPanel.tsx        management brief and analyse action
   Dashboard.tsx         saved-report list with re-download actions
+  AdvancedAnalysis.tsx  trend charts, division-share, and the schematic map
+  TrendCharts.tsx       admissions/deaths/cumulative over time
+  DivisionShare.tsx     donut chart, share of admissions by division
+  DivisionMap.tsx       schematic reporting-unit map, coloured by intensity
   UploadPdfForm.tsx     upload-and-analyse fallback when the DGHS fetch can't be trusted
   Footer.tsx            shared data-caveat footer
 lib/
