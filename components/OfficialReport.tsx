@@ -12,15 +12,37 @@ import {
 import { downloadOfficialReportImage, downloadOfficialReportPdf } from '@/lib/export-official-image';
 import type { DengueReport } from '@/lib/types';
 
-type Format = 'image' | 'pdf' | 'excel' | 'word';
+type Format = 'image' | 'pdf' | 'excel-unicode' | 'excel-legacy' | 'word' | 'html';
+
+async function downloadOfficialExcel(report: DengueReport, script: 'legacy' | 'unicode', filenameBase: string) {
+  const res = await fetch('/api/report/official-excel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report, script }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? 'The workbook could not be built.');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filenameBase} (${script === 'legacy' ? 'SutonnyMJ' : 'Unicode'}).xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
 
 /**
  * A faithful on-screen reproduction of the government sheet — exact wording,
- * exact eight rows (serial ২–৯, matching the reference workbook's own
- * structure), peach header shading, black cell borders. Downloadable as an
- * image, a PDF, an Excel workbook, or a Word document — all four built from
- * this same rendered element or the same data model, so none of them can
- * drift from what's on screen.
+ * exact eight rows (serial ২–৯, ঢাকা বিভাগ combining Dhaka Division with the
+ * two city corporations), peach header shading, black cell borders.
+ * Downloadable as an image, a PDF, an Excel workbook (Unicode or legacy
+ * SutonnyMJ), a Word document, or plain HTML — all built from this same
+ * rendered element or the same data model, so none of them can drift from
+ * what's on screen or from each other.
  */
 export function OfficialReport({ report }: { report: DengueReport }) {
   const m = buildOfficialReportModel(report);
@@ -47,27 +69,15 @@ export function OfficialReport({ report }: { report: DengueReport }) {
           case 'word':
             downloadOfficialReportWord(report);
             break;
-          case 'excel': {
-            const res = await fetch('/api/report/official-excel', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ report }),
-            });
-            if (!res.ok) {
-              const body = await res.json().catch(() => ({}));
-              throw new Error(body.error ?? 'The workbook could not be built.');
-            }
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${filenameBase}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 2000);
+          case 'html':
+            downloadOfficialReport(report);
             break;
-          }
+          case 'excel-unicode':
+            await downloadOfficialExcel(report, 'unicode', filenameBase);
+            break;
+          case 'excel-legacy':
+            await downloadOfficialExcel(report, 'legacy', filenameBase);
+            break;
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'That download could not be built.');
@@ -79,10 +89,12 @@ export function OfficialReport({ report }: { report: DengueReport }) {
   );
 
   const OPTIONS: { format: Format; label: string }[] = [
-    { format: 'image', label: 'Image (PNG)' },
+    { format: 'excel-unicode', label: 'Excel (Unicode)' },
+    { format: 'excel-legacy', label: 'Excel (SutonnyMJ)' },
     { format: 'pdf', label: 'PDF' },
-    { format: 'excel', label: 'Excel' },
     { format: 'word', label: 'Word' },
+    { format: 'html', label: 'HTML' },
+    { format: 'image', label: 'Image (PNG)' },
   ];
 
   return (
@@ -90,7 +102,7 @@ export function OfficialReport({ report }: { report: DengueReport }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-5 py-3">
         <div>
           <h2 className="text-sm font-semibold">Official report</h2>
-          <p className="mt-0.5 text-micro text-muted">The exact sheet layout, downloadable in four formats.</p>
+          <p className="mt-0.5 text-micro text-muted">The exact sheet layout, downloadable in six formats.</p>
         </div>
         <div className="relative">
           <button
@@ -217,10 +229,10 @@ export function OfficialReport({ report }: { report: DengueReport }) {
       </div>
 
       <p className="border-t border-rule px-5 py-3 text-micro leading-relaxed text-muted">
-        সর্বমোট is the press release&apos;s real national total for every column — it will not equal the sum of the
-        eight rows above, since this sheet doesn&apos;t itemise Dhaka North/South City Corporation. Discharged and
-        currently-admitted are national totals throughout; DGHS&apos;s current press release does not publish those
-        two per division.
+        ঢাকা বিভাগ combines Dhaka Division, Dhaka North City Corporation, and Dhaka South City Corporation into one
+        row, so সর্বমোট is both the press release&apos;s real national total and the sum of the eight rows above, for
+        every column with real per-division data. Discharged and currently-admitted are national totals throughout;
+        DGHS&apos;s current press release does not publish those two per division.
       </p>
     </section>
   );

@@ -6,6 +6,68 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.7.0, six download formats, corrected ঢাকা বিভাগ, signature everywhere
+
+### Three client requests
+
+1. Excel needed both scripts (Unicode and SutonnyMJ), plus PDF/Word/HTML —
+   the menu only had one Excel variant and had dropped plain HTML entirely
+   when it became a dropdown in v1.5.0.
+2. The signature needed to actually appear in every downloaded format.
+3. **ঢাকা বিভাগ = Dhaka Division + Dhaka North City + Dhaka South City,
+   summed** — not Dhaka Division alone, which is what v1.4.0 shipped after
+   guessing from the client's first reference image before the follow-up
+   images and this explicit instruction arrived.
+
+### What changed
+
+- **ঢাকা বিভাগ row.** `buildOfficialReportModel()` now sums all three Dhaka
+  entries into the row shown for serial ২, via the existing `sumRows()`
+  helper. This has a pleasant side effect: since v1.5.0 already made
+  সর্বমোট use the real national totals, and Dhaka's three components are
+  now fully accounted for in the eight visible rows, **সর্বমোট is now
+  provably equal to the sum of the rows above it** for every column with
+  real per-division data — verified arithmetically against the live report
+  (657+84+169+334+112+56+137+9 = 1,558, matching the national 24h total
+  exactly; same result cross-checked for deaths, cumulative admitted, and
+  cumulative deaths). The "won't equal a sum" caveat from v1.5.0 no longer
+  applies and the on-screen footnote was rewritten to say so.
+- **Excel gained a script parameter.** `buildOfficialReportWorkbook(report,
+  script)` now uses `pick()`/`FONT_FOR_SCRIPT` from `lib/bijoy.ts` throughout,
+  same as the NMEP workbook. One real bug caught before it shipped: the
+  signature's designation lines (উপপরিচালক, সিডিসি etc.) are Unicode Bangla
+  in the dictionary *regardless* of script — pointing the SutonnyMJ font at
+  that real Unicode text would have rendered mojibake, not just the wrong
+  glyphs. Fixed by giving those three lines their own fixed Nirmala UI font,
+  independent of the script toggle — the same pattern `lib/excel.ts` already
+  used for the NMEP workbook's signature block, for the same reason.
+- **HTML restored** as its own menu option (`downloadOfficialReport()` already
+  existed from v1.4.0, just wasn't wired into the v1.5.0 dropdown).
+- **Signature consistency.** Word can't fetch the `Caveat` Google Font its
+  `<link>` points at — Word's HTML importer doesn't load external
+  stylesheets — so `officialReportToWordHtml()` overrides the signature to
+  `"Segoe Script"` (ships with Windows/Office). Excel already used Segoe
+  Script. HTML, Image and PDF keep `Caveat`, which they can and do load.
+  Every format now shows a cursive signature; none silently fall back to
+  the body's plain sans-serif.
+- **Image padding.** `downloadOfficialReportImage()` draws the html2canvas
+  capture onto a larger white canvas (80px margin on all four sides at the
+  capture's 2x scale) instead of shipping the tight-cropped element — a
+  card that reads fine on a page looked cramped as a standalone image file.
+
+### Verified
+
+| What | How | Result |
+|---|---|---|
+| ঢাকা বিভাগ combination | Fetched the live 06/09/2026 report | Row shows ৬৫৭/৪/১৬৯৬৯/৬২ — matches 316+193+148, 1+0+3, 6333+5088+5548, 4+16+42 exactly |
+| সর্বমোট now sums the rows | Same report | ১৫৫৮/৪/৪২৫৯০/১১৭ — both the real national total *and* the sum of all eight rows |
+| Excel (SutonnyMJ) | Downloaded via the real menu, intercepted the blob | Valid `.xlsx`, 8,456 bytes, filename tagged `(SutonnyMJ)` |
+| Excel (Unicode) | Same | Valid `.xlsx`, 8,446 bytes, filename tagged `(Unicode)` |
+| Word | Same | Valid `.doc`, contains `Segoe Script`, no `fonts.googleapis` reference |
+| HTML | Same | Valid, contains the signature and the `Caveat` font link |
+| Image padding | Downloaded, loaded the blob into an `<img>`, screenshotted | Visible white margin on all sides; table and signature otherwise unchanged |
+| `npm run typecheck` / `npm run build` | — | Clean |
+
 ## 2026-09-08 — v1.6.0, Advanced Analysis tab
 
 ### What was asked

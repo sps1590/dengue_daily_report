@@ -14,9 +14,25 @@ async function captureElement(el: HTMLElement): Promise<HTMLCanvasElement> {
   return html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
 }
 
+/** Visual breathing room around the report in the downloaded image, at the capture's 2x scale. */
+const IMAGE_MARGIN_PX = 80;
+
 export async function downloadOfficialReportImage(el: HTMLElement, filenameBase: string): Promise<void> {
-  const canvas = await captureElement(el);
-  const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  const captured = await captureElement(el);
+
+  // html2canvas crops tight to the element's own box, which reads as cramped
+  // once it's a standalone image rather than a card on a page — pad it out
+  // on a larger white canvas instead of shrinking the capture itself.
+  const padded = document.createElement('canvas');
+  padded.width = captured.width + IMAGE_MARGIN_PX * 2;
+  padded.height = captured.height + IMAGE_MARGIN_PX * 2;
+  const ctx = padded.getContext('2d');
+  if (!ctx) throw new Error('Could not render the image.');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, padded.width, padded.height);
+  ctx.drawImage(captured, IMAGE_MARGIN_PX, IMAGE_MARGIN_PX);
+
+  const blob: Blob | null = await new Promise((resolve) => padded.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('Could not render the image.');
   downloadFile(`${filenameBase}.png`, blob, 'image/png');
 }

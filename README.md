@@ -19,7 +19,7 @@ Pick a date. The app finds that day's press release on the DGHS portal, reads th
 Three outputs:
 
 - **Excel** — the government sheet, in either legacy SutonnyMJ or Unicode Bangla.
-- **Official report** — an on-screen, pixel-faithful reproduction of the sheet NMEP circulates (peach header shading, black cell borders, the exact eight rows serial ২–৯), downloadable as an **Image (PNG)**, a **PDF**, an **Excel** workbook, or a **Word** document — pick one from the "Download Report" menu.
+- **Official report** — an on-screen, pixel-faithful reproduction of the sheet NMEP circulates (peach header shading, black cell borders, the exact eight rows serial ২–৯ with ঢাকা বিভাগ combining Dhaka Division + Dhaka North + Dhaka South City Corporation), downloadable as **Excel (Unicode)**, **Excel (SutonnyMJ)**, **PDF**, **Word**, **HTML**, or an **Image (PNG)** — pick one from the "Download Report" menu. The signature renders as cursive text in every format (`Caveat` where a web font will load, `Segoe Script` in Excel/Word where it won't).
 - **Management brief** — interpretation rather than restatement, in English or Bangla, exportable the same way.
 
 An **Advanced Analysis** tab turns every report saved to this browser into

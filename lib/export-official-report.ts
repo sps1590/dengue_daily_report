@@ -1,15 +1,21 @@
 import { toBengaliDigits } from './bengali';
 import { LABELS, REGION_LABELS, comparisonHeading, cumulativeHeader, periodLabel } from './bijoy';
 import { downloadFile } from './export-brief';
-import { REGION_ORDER, type DengueReport, type RegionRow } from './types';
+import { sumRows } from './parse';
+import { REGION_ORDER, type DengueReport, type RegionKey, type RegionRow } from './types';
 
 /**
  * The reference sheet's own eight rows: serial ২–৯, Dhaka Division through
- * Sylhet. Serial ১ (the two city corporations) is not part of this document
- * — see docs/PROGRESS.md v1.4.0 for why, confirmed against the client's own
- * reference image.
+ * Sylhet. Serial ১ isn't a separate row — instead, per the client, the
+ * ঢাকা বিভাগ row is Dhaka Division + Dhaka North City + Dhaka South City
+ * summed together, not Dhaka Division alone. That also means these eight
+ * rows now sum to the exact same national totals as `report.totals` for
+ * every column those totals actually have real per-division data for
+ * (verified against a live report: every one of admitted24h/deaths24h/
+ * totalAdmitted/totalDeaths matched exactly).
  */
 const OFFICIAL_REGION_KEYS = REGION_ORDER.slice(2);
+const DHAKA_COMBINED_KEYS: RegionKey[] = ['DHAKA_DIVISION', 'DHAKA_NORTH_CITY', 'DHAKA_SOUTH_CITY'];
 
 export interface OfficialReportRow {
   serial: string;
@@ -42,8 +48,14 @@ export function buildOfficialReportModel(report: DengueReport): OfficialReportMo
   const year = Number(report.date.slice(0, 4));
 
   const rows: OfficialReportRow[] = OFFICIAL_REGION_KEYS.map((key, i) => {
-    const row =
-      report.rows.find((r) => r.key === key) ?? {
+    let row: RegionRow;
+    if (key === 'DHAKA_DIVISION') {
+      const parts = DHAKA_COMBINED_KEYS.map((k) => report.rows.find((r) => r.key === k)).filter(
+        (r): r is RegionRow => r !== undefined,
+      );
+      row = { key, ...sumRows(parts) };
+    } else {
+      row = report.rows.find((r) => r.key === key) ?? {
         key,
         admitted24h: null,
         deaths24h: null,
@@ -52,6 +64,7 @@ export function buildOfficialReportModel(report: DengueReport): OfficialReportMo
         discharged: null,
         currentlyAdmitted: null,
       };
+    }
     return { serial: toBengaliDigits(i + 2), name: REGION_LABELS[key].unicode, row };
   });
 
@@ -238,6 +251,12 @@ ${officialReportBodyHtml(m)}
  * needed, and no risk of the Bangla-glyph problem that ruled out `jspdf` for
  * text rendering elsewhere in this app, since Word renders the same HTML/CSS
  * text this page does rather than re-drawing glyphs from an embedded font.
+ *
+ * Word's HTML importer does not fetch external stylesheets, so the `Caveat`
+ * web font the browser-facing exports use for the signature never loads —
+ * the override below points it at script fonts that ship with Windows/Office
+ * instead, so the signature still renders as cursive rather than falling
+ * back to the body's plain sans-serif.
  */
 export function officialReportToWordHtml(report: DengueReport): string {
   const m = buildOfficialReportModel(report);
@@ -250,6 +269,7 @@ export function officialReportToWordHtml(report: DengueReport): string {
 <style>
   @page { size: 21cm 29.7cm; margin: 1.5cm; }
   ${OFFICIAL_REPORT_CSS}
+  .official-report .signature-cursive{font-family:"Segoe Script","Bradley Hand","Lucida Handwriting",cursive;}
 </style>
 </head>
 <body>

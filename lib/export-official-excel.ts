@@ -1,16 +1,16 @@
 import ExcelJS from 'exceljs';
-import { LABELS } from './bijoy';
+import { FONT_FOR_SCRIPT, LABELS, REGION_LABELS, pick, type OutputScript } from './bijoy';
 import { buildOfficialReportModel } from './export-official-report';
 import type { DengueReport } from './types';
 
 /**
- * A plain Unicode workbook of the official report's own eight-row shape —
- * not the byte-exact SutonnyMJ replica `lib/excel.ts` builds for the
- * circulated ten-row NMEP file. This is a new document, so it doesn't need
- * to match a legacy font encoding; Nirmala UI and Unicode Bangla are enough.
+ * The official report's own eight-row shape, in either script — unlike
+ * `lib/excel.ts` (the ten-row NMEP replica), this is a new document with no
+ * legacy circulated file to byte-match, but the client asked for the same
+ * SutonnyMJ/Unicode choice anyway, so it reuses the same `lib/bijoy.ts`
+ * dictionary and `pick()` helper rather than inventing a second one.
  */
 
-const FONT = 'Nirmala UI';
 const FONT_SIZE = 11;
 
 const thin: Partial<ExcelJS.Borders> = {
@@ -22,8 +22,9 @@ const thin: Partial<ExcelJS.Borders> = {
 
 const peachFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };
 
-export async function buildOfficialReportWorkbook(report: DengueReport): Promise<Uint8Array> {
+export async function buildOfficialReportWorkbook(report: DengueReport, script: OutputScript): Promise<Uint8Array> {
   const m = buildOfficialReportModel(report);
+  const font = FONT_FOR_SCRIPT[script];
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'dengue_daily_report';
@@ -41,7 +42,7 @@ export async function buildOfficialReportWorkbook(report: DengueReport): Promise
     { width: 16 }, // H
   ];
 
-  const base = (size = FONT_SIZE, bold = false): Partial<ExcelJS.Font> => ({ name: FONT, size, bold });
+  const base = (size = FONT_SIZE, bold = false): Partial<ExcelJS.Font> => ({ name: font, size, bold });
   const set = (addr: string, value: ExcelJS.CellValue, style: Partial<ExcelJS.Style> = {}) => {
     const cell = ws.getCell(addr);
     cell.value = value;
@@ -54,14 +55,19 @@ export async function buildOfficialReportWorkbook(report: DengueReport): Promise
   const centered: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
   // -- Masthead --------------------------------------------------------------
-  const masthead = [LABELS.govt.unicode, LABELS.dghs.unicode.trim(), LABELS.branch.unicode, LABELS.address.unicode];
+  const masthead = [
+    pick(LABELS.govt, script),
+    pick(LABELS.dghs, script).trim(),
+    pick(LABELS.branch, script),
+    pick(LABELS.address, script),
+  ];
   masthead.forEach((text, i) => {
     const row = i + 1;
     ws.mergeCells(`A${row}:H${row}`);
     set(`A${row}`, text, { font: base(12, true), alignment: centered });
   });
   ws.mergeCells('A6:H6');
-  set('A6', LABELS.title.unicode, { font: base(13, true), alignment: centered });
+  set('A6', pick(LABELS.title, script), { font: base(13, true), alignment: centered });
 
   // -- Table 1 header (rows 8-9) ----------------------------------------------
   const hRow1 = 8;
@@ -73,20 +79,20 @@ export async function buildOfficialReportWorkbook(report: DengueReport): Promise
   ws.mergeCells(`H${hRow1}:H${hRow2}`);
 
   const hdr = { font: base(FONT_SIZE, true), alignment: centered, border: thin, fill: peachFill };
-  set(`A${hRow1}`, 'ক্রমিক নং', hdr);
-  set(`B${hRow1}`, LABELS.divisionName.unicode, hdr);
-  set(`C${hRow1}`, LABELS.last24h.unicode, hdr);
+  set(`A${hRow1}`, pick(LABELS.serial, script), hdr);
+  set(`B${hRow1}`, pick(LABELS.divisionName, script), hdr);
+  set(`C${hRow1}`, pick(LABELS.last24h, script), hdr);
   set(`E${hRow1}`, m.cumulativeHeaderText, hdr);
-  set(`H${hRow1}`, LABELS.currentlyAdmitted.unicode, hdr);
+  set(`H${hRow1}`, pick(LABELS.currentlyAdmitted, script), hdr);
   for (const addr of [`D${hRow1}`, `F${hRow1}`, `G${hRow1}`, `A${hRow2}`, `B${hRow2}`, `H${hRow2}`]) {
     ws.getCell(addr).border = thin;
     ws.getCell(addr).fill = peachFill;
   }
-  set(`C${hRow2}`, LABELS.admitted.unicode, hdr);
-  set(`D${hRow2}`, LABELS.deaths.unicode, hdr);
-  set(`E${hRow2}`, LABELS.totalAdmitted.unicode, hdr);
-  set(`F${hRow2}`, LABELS.totalDeaths.unicode, hdr);
-  set(`G${hRow2}`, LABELS.discharged.unicode, hdr);
+  set(`C${hRow2}`, pick(LABELS.admitted, script), hdr);
+  set(`D${hRow2}`, pick(LABELS.deaths, script), hdr);
+  set(`E${hRow2}`, pick(LABELS.totalAdmitted, script), hdr);
+  set(`F${hRow2}`, pick(LABELS.totalDeaths, script), hdr);
+  set(`G${hRow2}`, pick(LABELS.discharged, script), hdr);
 
   // -- Table 1 body ------------------------------------------------------------
   const FIRST = hRow2 + 1;
@@ -95,7 +101,7 @@ export async function buildOfficialReportWorkbook(report: DengueReport): Promise
     const cell = (addr: string, v: ExcelJS.CellValue, align: Partial<ExcelJS.Alignment> = centered) =>
       set(addr, v, { font: base(), alignment: align, border: thin });
     cell(`A${n}`, r.serial);
-    cell(`B${n}`, r.name, { horizontal: 'left', vertical: 'middle' });
+    cell(`B${n}`, pick(REGION_LABELS[r.row.key], script), { horizontal: 'left', vertical: 'middle' });
     cell(`C${n}`, r.row.admitted24h);
     cell(`D${n}`, r.row.deaths24h);
     cell(`E${n}`, r.row.totalAdmitted);
@@ -104,13 +110,14 @@ export async function buildOfficialReportWorkbook(report: DengueReport): Promise
     cell(`H${n}`, r.row.currentlyAdmitted ?? '—');
   });
 
-  // The সর্বমোট row is the press release's own national totals, not a sum of
-  // these eight rows — they omit Dhaka North/South City Corporation, so a
-  // SUM() formula here would under-count against DGHS's published figures.
+  // The সর্বমোট row is the press release's own national totals. Now that the
+  // ঢাকা বিভাগ row combines Dhaka Division + DNCC + DSCC, this is also just
+  // the sum of the eight rows above for every column that has real
+  // per-division data — discharged/currentlyAdmitted are still national-only.
   const totalRow = FIRST + m.rows.length;
   ws.mergeCells(`A${totalRow}:B${totalRow}`);
   const totalStyle = { font: base(FONT_SIZE, true), alignment: centered, border: thin };
-  set(`A${totalRow}`, LABELS.grandTotal.unicode, totalStyle);
+  set(`A${totalRow}`, pick(LABELS.grandTotal, script), totalStyle);
   set(`C${totalRow}`, m.rowTotals.admitted24h, totalStyle);
   set(`D${totalRow}`, m.rowTotals.deaths24h, totalStyle);
   set(`E${totalRow}`, m.rowTotals.totalAdmitted, totalStyle);
@@ -126,11 +133,11 @@ export async function buildOfficialReportWorkbook(report: DengueReport): Promise
   const cmpHead = heading2 + 2;
   ws.mergeCells(`B${cmpHead}:D${cmpHead}`);
   ws.mergeCells(`E${cmpHead}:F${cmpHead}`);
-  set(`A${cmpHead}`, LABELS.serialFlat.unicode, hdr);
-  set(`B${cmpHead}`, LABELS.year.unicode, hdr);
-  set(`E${cmpHead}`, LABELS.caseCount.unicode, hdr);
-  set(`G${cmpHead}`, LABELS.deathCount.unicode, hdr);
-  set(`H${cmpHead}`, LABELS.remarks.unicode, hdr);
+  set(`A${cmpHead}`, pick(LABELS.serialFlat, script), hdr);
+  set(`B${cmpHead}`, pick(LABELS.year, script), hdr);
+  set(`E${cmpHead}`, pick(LABELS.caseCount, script), hdr);
+  set(`G${cmpHead}`, pick(LABELS.deathCount, script), hdr);
+  set(`H${cmpHead}`, pick(LABELS.remarks, script), hdr);
   for (const addr of [`C${cmpHead}`, `D${cmpHead}`, `F${cmpHead}`]) {
     ws.getCell(addr).border = thin;
     ws.getCell(addr).fill = peachFill;
@@ -154,15 +161,23 @@ export async function buildOfficialReportWorkbook(report: DengueReport): Promise
   // -- Footer ------------------------------------------------------------------
   const noteRow = cmpHead + m.comparisonRows.length + 2;
   ws.mergeCells(`A${noteRow}:H${noteRow}`);
-  set(`A${noteRow}`, LABELS.sourceNote.unicode, { font: base(FONT_SIZE, true), alignment: { horizontal: 'left', vertical: 'middle', wrapText: true } });
+  set(`A${noteRow}`, pick(LABELS.sourceNote, script), { font: base(FONT_SIZE, true), alignment: { horizontal: 'left', vertical: 'middle', wrapText: true } });
 
+  // Excel has no way to load a web font, so the signature uses a script font
+  // that ships with Windows/Office instead of the browser exports' `Caveat`.
+  // The designation lines are Unicode Bangla in the dictionary regardless of
+  // script (the reference workbook keeps this block in Unicode even in its
+  // legacy export — see lib/excel.ts), so they always need a Unicode-capable
+  // font: SutonnyMJ applied to real Unicode text renders as mojibake, not
+  // just the wrong glyphs.
   const sigStart = noteRow + 3;
-  const sigFont: Partial<ExcelJS.Font> = { name: 'Segoe Script', size: 16, italic: true };
-  set(`G${sigStart}`, 'Anahar', { font: sigFont, alignment: { horizontal: 'center' } });
-  set(`G${sigStart + 1}`, m.downloadDate, { font: base(), alignment: { horizontal: 'center' } });
-  set(`G${sigStart + 2}`, LABELS.signatory.unicode, { font: base(), alignment: { horizontal: 'center' } });
-  set(`G${sigStart + 3}`, LABELS.signatoryOrg.unicode, { font: base(), alignment: { horizontal: 'center' } });
-  set(`G${sigStart + 4}`, LABELS.signatoryAddr.unicode, { font: base(), alignment: { horizontal: 'center' } });
+  const sigCursiveFont: Partial<ExcelJS.Font> = { name: 'Segoe Script', size: 16, italic: true };
+  const sigTextFont: Partial<ExcelJS.Font> = { name: 'Nirmala UI', size: FONT_SIZE };
+  set(`G${sigStart}`, 'Anahar', { font: sigCursiveFont, alignment: { horizontal: 'center' } });
+  set(`G${sigStart + 1}`, m.downloadDate, { font: sigTextFont, alignment: { horizontal: 'center' } });
+  set(`G${sigStart + 2}`, pick(LABELS.signatory, script), { font: sigTextFont, alignment: { horizontal: 'center' } });
+  set(`G${sigStart + 3}`, pick(LABELS.signatoryOrg, script), { font: sigTextFont, alignment: { horizontal: 'center' } });
+  set(`G${sigStart + 4}`, pick(LABELS.signatoryAddr, script), { font: sigTextFont, alignment: { horizontal: 'center' } });
 
   ws.pageSetup = {
     paperSize: 9,
