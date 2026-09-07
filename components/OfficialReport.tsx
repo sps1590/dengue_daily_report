@@ -1,38 +1,133 @@
 'use client';
 
+import { useCallback, useRef, useState } from 'react';
 import { LABELS } from '@/lib/bijoy';
-import { OFFICIAL_REPORT_CSS, buildOfficialReportModel, downloadOfficialReport, fmtBn } from '@/lib/export-official-report';
+import {
+  OFFICIAL_REPORT_CSS,
+  buildOfficialReportModel,
+  downloadOfficialReport,
+  downloadOfficialReportWord,
+  fmtBn,
+} from '@/lib/export-official-report';
+import { downloadOfficialReportImage, downloadOfficialReportPdf } from '@/lib/export-official-image';
 import type { DengueReport } from '@/lib/types';
+
+type Format = 'image' | 'pdf' | 'excel' | 'word';
 
 /**
  * A faithful on-screen reproduction of the government sheet — exact wording,
  * exact eight rows (serial ২–৯, matching the reference workbook's own
- * structure), peach header shading, black cell borders. "Download Report"
- * builds the same document as a standalone HTML page and hands it straight
- * to the browser's print dialog, so "Save as PDF" is a single click away.
+ * structure), peach header shading, black cell borders. Downloadable as an
+ * image, a PDF, an Excel workbook, or a Word document — all four built from
+ * this same rendered element or the same data model, so none of them can
+ * drift from what's on screen.
  */
 export function OfficialReport({ report }: { report: DengueReport }) {
   const m = buildOfficialReportModel(report);
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [busy, setBusy] = useState<Format | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const filenameBase = `Dengue official report ${report.date}`;
+
+  const handleFormat = useCallback(
+    async (format: Format) => {
+      setMenuOpen(false);
+      setError(null);
+      setBusy(format);
+      try {
+        switch (format) {
+          case 'image':
+            if (reportRef.current) await downloadOfficialReportImage(reportRef.current, filenameBase);
+            break;
+          case 'pdf':
+            if (reportRef.current) await downloadOfficialReportPdf(reportRef.current, filenameBase);
+            break;
+          case 'word':
+            downloadOfficialReportWord(report);
+            break;
+          case 'excel': {
+            const res = await fetch('/api/report/official-excel', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ report }),
+            });
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}));
+              throw new Error(body.error ?? 'The workbook could not be built.');
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${filenameBase}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            break;
+          }
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'That download could not be built.');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [report, filenameBase],
+  );
+
+  const OPTIONS: { format: Format; label: string }[] = [
+    { format: 'image', label: 'Image (PNG)' },
+    { format: 'pdf', label: 'PDF' },
+    { format: 'excel', label: 'Excel' },
+    { format: 'word', label: 'Word' },
+  ];
 
   return (
     <section className="rounded-panel bg-card shadow-panel">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule px-5 py-3">
         <div>
           <h2 className="text-sm font-semibold">Official report</h2>
-          <p className="mt-0.5 text-micro text-muted">The exact sheet layout, ready to print or save as PDF.</p>
+          <p className="mt-0.5 text-micro text-muted">The exact sheet layout, downloadable in four formats.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => downloadOfficialReport(report)}
-          className="rounded-sheet bg-ink px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-signal-deep"
-        >
-          Download Report
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            disabled={busy !== null}
+            className="rounded-sheet bg-ink px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-signal-deep disabled:cursor-not-allowed disabled:bg-muted"
+          >
+            {busy ? `Building ${OPTIONS.find((o) => o.format === busy)?.label}…` : 'Download Report ▾'}
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 z-20 mt-1.5 w-44 overflow-hidden rounded-sheet border border-rule bg-card shadow-panel">
+                {OPTIONS.map((opt) => (
+                  <button
+                    key={opt.format}
+                    type="button"
+                    onClick={() => handleFormat(opt.format)}
+                    className="block w-full px-3.5 py-2 text-left text-[13px] text-ink transition-colors hover:bg-signal-wash hover:text-signal"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
+
+      {error && (
+        <p className="border-b border-rule bg-alert-wash px-5 py-2.5 text-[13px] text-alert">{error}</p>
+      )}
 
       <div className="overflow-x-auto px-5 py-5">
         <style>{OFFICIAL_REPORT_CSS}</style>
-        <div className="official-report" style={{ maxWidth: 'none', padding: 0 }}>
+        <div ref={reportRef} className="official-report" style={{ maxWidth: 'none', padding: 0 }}>
           <div className="org-header">
             <p>{LABELS.govt.unicode}</p>
             <p>{LABELS.dghs.unicode.trim()}</p>
@@ -122,8 +217,10 @@ export function OfficialReport({ report }: { report: DengueReport }) {
       </div>
 
       <p className="border-t border-rule px-5 py-3 text-micro leading-relaxed text-muted">
-        Discharged and currently-admitted figures are national totals — DGHS's current press release does not
-        publish those two per division. Every other cell is a real reported figure.
+        সর্বমোট is the press release&apos;s real national total for every column — it will not equal the sum of the
+        eight rows above, since this sheet doesn&apos;t itemise Dhaka North/South City Corporation. Discharged and
+        currently-admitted are national totals throughout; DGHS&apos;s current press release does not publish those
+        two per division.
       </p>
     </section>
   );

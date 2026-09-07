@@ -1,7 +1,6 @@
 import { toBengaliDigits } from './bengali';
 import { LABELS, REGION_LABELS, comparisonHeading, cumulativeHeader, periodLabel } from './bijoy';
 import { downloadFile } from './export-brief';
-import { sumRows } from './parse';
 import { REGION_ORDER, type DengueReport, type RegionRow } from './types';
 
 /**
@@ -20,9 +19,14 @@ export interface OfficialReportRow {
 
 export interface OfficialReportModel {
   rows: OfficialReportRow[];
-  /** Sum of the eight shown rows — real for admitted/deaths, not for discharged/currentlyAdmitted. */
+  /**
+   * The সর্বমোট row: the press release's own real national totals for every
+   * column, not a sum of the eight shown rows. The two omit Dhaka North/South
+   * City Corporation, so summing just those eight would under-count against
+   * DGHS's published figures — this deliberately doesn't do that.
+   */
   rowTotals: Omit<RegionRow, 'key'>;
-  /** The report's true national totals, including the two city corporations this document omits. */
+  /** Same values as rowTotals.discharged/currentlyAdmitted — kept as distinct fields since callers reach for them by name. */
   nationalDischarged: number | null;
   nationalCurrentlyAdmitted: number | null;
   cumulativeHeaderText: string;
@@ -51,8 +55,6 @@ export function buildOfficialReportModel(report: DengueReport): OfficialReportMo
     return { serial: toBengaliDigits(i + 2), name: REGION_LABELS[key].unicode, row };
   });
 
-  const rowTotals = sumRows(rows.map((r) => r.row));
-
   const now = new Date();
   const downloadDate = `${toBengaliDigits(now.getDate())}/${toBengaliDigits(now.getMonth() + 1)}/${toBengaliDigits(now.getFullYear())}`;
 
@@ -74,7 +76,7 @@ export function buildOfficialReportModel(report: DengueReport): OfficialReportMo
 
   return {
     rows,
-    rowTotals,
+    rowTotals: report.totals,
     nationalDischarged: report.totals.discharged,
     nationalCurrentlyAdmitted: report.totals.currentlyAdmitted,
     cumulativeHeaderText: cumulativeHeader(year, 'unicode'),
@@ -143,29 +145,9 @@ function comparisonRowsHtml(m: OfficialReportModel): string {
     .join('');
 }
 
-/**
- * A self-contained HTML document reproducing the official report exactly —
- * no site chrome, so what prints is what's on the page. Opened in a new tab
- * and printed immediately; the browser's own "Save as PDF" destination is
- * the actual export mechanism, which is also the only way to get a Bangla
- * PDF without embedding a font (see lib/export-brief.ts for the same
- * reasoning applied to the management brief).
- */
-export function officialReportToHtml(report: DengueReport): string {
-  const m = buildOfficialReportModel(report);
-  return `<!doctype html>
-<html lang="bn">
-<meta charset="utf-8">
-<title>ডেঙ্গু প্রতিবেদন — ${report.date}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&display=swap">
-<style>
-  @page { size: A4; margin: 10mm; }
-  * { box-sizing: border-box; }
-  html, body { background:#fff; }
-  body { margin:0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  ${OFFICIAL_REPORT_CSS}
-</style>
-<div class="official-report">
+/** The `.official-report` markup itself, shared by the HTML/print export and the Word export. */
+function officialReportBodyHtml(m: OfficialReportModel): string {
+  return `<div class="official-report">
   <div class="org-header">
     <p>${LABELS.govt.unicode}</p>
     <p>${LABELS.dghs.unicode.trim()}</p>
@@ -221,7 +203,58 @@ export function officialReportToHtml(report: DengueReport): string {
     <p class="signature-role">${LABELS.signatoryOrg.unicode}</p>
     <p class="signature-role">${LABELS.signatoryAddr.unicode}</p>
   </div>
-</div>
+</div>`;
+}
+
+/**
+ * A self-contained HTML document reproducing the official report exactly —
+ * no site chrome, so what prints is what's on the page. Opened in a new tab
+ * and printed immediately; the browser's own "Save as PDF" destination is
+ * the actual export mechanism, which is also the only way to get a Bangla
+ * PDF without embedding a font (see lib/export-brief.ts for the same
+ * reasoning applied to the management brief).
+ */
+export function officialReportToHtml(report: DengueReport): string {
+  const m = buildOfficialReportModel(report);
+  return `<!doctype html>
+<html lang="bn">
+<meta charset="utf-8">
+<title>ডেঙ্গু প্রতিবেদন — ${report.date}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&display=swap">
+<style>
+  @page { size: A4; margin: 10mm; }
+  * { box-sizing: border-box; }
+  html, body { background:#fff; }
+  body { margin:0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  ${OFFICIAL_REPORT_CSS}
+</style>
+${officialReportBodyHtml(m)}
+</html>`;
+}
+
+/**
+ * Word opens HTML directly when it carries the `mso-application` marker and
+ * the `urn:schemas-microsoft-com:office:*` namespaces — no OOXML library
+ * needed, and no risk of the Bangla-glyph problem that ruled out `jspdf` for
+ * text rendering elsewhere in this app, since Word renders the same HTML/CSS
+ * text this page does rather than re-drawing glyphs from an embedded font.
+ */
+export function officialReportToWordHtml(report: DengueReport): string {
+  const m = buildOfficialReportModel(report);
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<meta name="ProgId" content="Word.Document">
+<title>ডেঙ্গু প্রতিবেদন — ${report.date}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+  @page { size: 21cm 29.7cm; margin: 1.5cm; }
+  ${OFFICIAL_REPORT_CSS}
+</style>
+</head>
+<body>
+${officialReportBodyHtml(m)}
+</body>
 </html>`;
 }
 
@@ -238,4 +271,10 @@ export function officialReportToHtml(report: DengueReport): string {
 export function downloadOfficialReport(report: DengueReport): void {
   const html = officialReportToHtml(report);
   downloadFile(`Dengue official report ${report.date}.html`, html, 'text/html;charset=utf-8');
+}
+
+/** Downloads a `.doc` file — Word opens it directly (see officialReportToWordHtml). */
+export function downloadOfficialReportWord(report: DengueReport): void {
+  const html = officialReportToWordHtml(report);
+  downloadFile(`Dengue official report ${report.date}.doc`, html, 'application/msword;charset=utf-8');
 }

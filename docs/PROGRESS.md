@@ -6,6 +6,61 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.5.0, four real download formats; fixed a totals mismatch
+
+### Two client requests
+
+1. "The report download options will be the Image, Pdf, Excel, and Word" —
+   the single HTML-then-print-it-yourself download wasn't enough; each format
+   needed to be a real, directly downloaded file.
+2. The client noticed সর্বমোট (the totals row) didn't match the press
+   release's own published national figures. It didn't, on purpose but
+   wrongly: `rowTotals` was `sumRows()` of just the eight shown division rows,
+   which excludes Dhaka North/South City Corporation by design (see v1.4.0)
+   — so admitted/deaths/totalAdmitted/totalDeaths under-counted against
+   DGHS's real totals, while discharged/currentlyAdmitted (already sourced
+   from `report.totals`) did not. Fixed by making the whole totals row use
+   `report.totals` — the real national figures — for every column. It will
+   still not equal a sum of the eight rows above it, which is correct and
+   now says so in the footnote, rather than silently being wrong.
+
+### What was built
+
+- **Image / PDF** — `lib/export-official-image.ts`, dynamically imports
+  `html2canvas` (only on click, not in the initial bundle) to rasterise the
+  actual on-screen `.official-report` element — whatever font really
+  rendered, borders, peach fill, all of it — into a canvas. Image downloads
+  that as a PNG. PDF wraps it in a single-page A4 `jsPDF` document. `jsPDF`
+  was previously ruled out for this app (management brief) because it can't
+  render Bangla *text* — that objection doesn't apply here, since it's only
+  placing a picture, never drawing a glyph. Discovered along the way that
+  passing jsPDF a PNG data URL stores it close to raw (7.4 MB for one page);
+  switched to JPEG at 0.92 quality, invisible loss on a black-on-white/peach
+  table, and the file dropped to ~227 KB.
+- **Excel** — `lib/export-official-excel.ts` + `app/api/report/official-excel/route.ts`.
+  A plain Unicode workbook (Nirmala UI, not SutonnyMJ — this is a new
+  document, not required to byte-match the legacy circulated file) mirroring
+  the on-screen eight rows, peach header fill, thin borders, comparison
+  table, and the same corrected totals-row logic.
+- **Word** — `officialReportToWordHtml()` in `lib/export-official-report.ts`,
+  reusing the same row-rendering functions as the HTML/print export. Word
+  opens HTML directly when it carries the `office:word` XML namespace and an
+  `mso-application` marker — no OOXML library needed, downloaded as `.doc`.
+- The single "Download Report" button became a small dropdown
+  (Image / PDF / Excel / Word), each with its own busy state and error
+  message, since image/PDF generation isn't instant.
+
+### Verified
+
+| What | How | Result |
+|---|---|---|
+| Totals fix | Fetched the live 06/09/2026 report, read সর্বমোট | ১৫৫৮ । ৪ । ৪২৫৯০ । ১১৭ — matches the press release's own headline figures (1,558 / 4 / 42,590 / 117) exactly |
+| Image | Clicked through the real menu in a running dev server, rendered the downloaded PNG back into the page and screenshotted it | Peach headers, black borders, correct Bangla text and figures — pixel-identical to the live component |
+| PDF | Intercepted the blob at `URL.createObjectURL` (jsPDF's `.save()` doesn't go through a `click()` call, so an anchor-click interceptor doesn't see it) | Valid `application/pdf`, 227 KB after the JPEG switch (was 7.4 MB with PNG) |
+| Excel | Same interception approach | Valid `.xlsx`, correct MIME, 8.4 KB |
+| Word | Same | Valid `.doc`, carries the `office:word` namespace, opens as HTML-for-Word |
+| `npm run typecheck` | — | Clean |
+
 ## 2026-09-08 — v1.4.0, real working data source, official-report replica, print export
 
 ### The new source

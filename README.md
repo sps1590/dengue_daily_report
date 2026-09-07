@@ -19,7 +19,7 @@ Pick a date. The app finds that day's press release on the DGHS portal, reads th
 Three outputs:
 
 - **Excel** — the government sheet, in either legacy SutonnyMJ or Unicode Bangla.
-- **Official report** — an on-screen, pixel-faithful reproduction of the sheet NMEP circulates (peach header shading, black cell borders, the exact eight rows serial ২–৯), downloadable as a self-contained HTML file that prints to one A4 page with colours intact.
+- **Official report** — an on-screen, pixel-faithful reproduction of the sheet NMEP circulates (peach header shading, black cell borders, the exact eight rows serial ২–৯), downloadable as an **Image (PNG)**, a **PDF**, an **Excel** workbook, or a **Word** document — pick one from the "Download Report" menu.
 - **Management brief** — interpretation rather than restatement, in English or Bangla, exportable the same way.
 
 A **Dashboard** tab keeps every report fetched in this browser (`lib/history.ts`,
@@ -144,7 +144,7 @@ components/
   Pipeline.tsx          five-step progress rail
   FigureStrip.tsx       headline figures
   SheetTable.tsx        division table, English/Bangla toggle
-  OfficialReport.tsx    exact-match sheet replica, plus its own Download Report
+  OfficialReport.tsx    exact-match sheet replica, plus its Image/PDF/Excel/Word menu
   BurdenChart.tsx       Dhaka split and division ranking
   BriefPanel.tsx        management brief and analyse action
   Dashboard.tsx         saved-report list with re-download actions
@@ -157,7 +157,9 @@ lib/
   pdf.ts                text extraction (unpdf)
   parse.ts              legacy table parser + parseBiPressRelease for the current export format
   ai.ts                 model extraction and brief generation
-  export-official-report.ts  official-report HTML export, shared with the on-screen component
+  export-official-report.ts  official-report data model + HTML/Word export
+  export-official-excel.ts   official-report Excel workbook (server-side)
+  export-official-image.ts   Image/PDF export (html2canvas + jsPDF, client-side)
   excel.ts              workbook writer  ← geometry from the reference file
   export-brief.ts       self-contained HTML brief
   download.ts           shared Excel-download call, used by Report and Dashboard
