@@ -14,6 +14,12 @@ export const LISTING_URL =
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
+const BROWSER_HEADERS = {
+  'User-Agent': UA,
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8',
+};
+
 export interface ListingEntry {
   /** ISO date parsed from the row's publish_date column. */
   date: string;
@@ -55,15 +61,66 @@ function parseListingRows(html: string): ListingEntry[] {
   return rows;
 }
 
-export async function fetchListing(): Promise<ListingEntry[]> {
+/**
+ * Turns whatever `fetch()` throws for a network-level failure (Node's
+ * undici gives the unhelpful, literal message "fetch failed" for a
+ * connection reset/refused/timed-out) into something a user can act on.
+ * This is what shows up when DGHS's server — or a WAF in front of it —
+ * won't complete the connection from this network at all, which is a real,
+ * observed failure mode distinct from "this date isn't published".
+ */
+function describeNetworkFailure(err: unknown): Error {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|network/i.test(message)) {
+    return new Error(
+      "Could not reach the DGHS server from here — it isn't responding to this app's requests right now " +
+        '(this can happen when a government server rate-limits or firewalls automated traffic). ' +
+        'This isn\'t about the date you picked: switch to "Upload PDF" and attach the release yourself, or try fetching again in a few minutes.',
+    );
+  }
+  return err instanceof Error ? err : new Error(message);
+}
+
+/**
+ * A short in-memory cache for the listing fetch. Best-effort only — a
+ * serverless function instance is not guaranteed to survive between
+ * requests — but when it does, this both cuts DGHS's own load from repeat
+ * "Fetch report" clicks (several users checking the same day) and reduces
+ * how often this app's own traffic could look like a burst worth blocking.
+ */
+let listingCache: { at: number; entries: ListingEntry[] } | null = null;
+const LISTING_CACHE_MS = 5 * 60 * 1000;
+
+async function fetchListingOnce(): Promise<ListingEntry[]> {
   const res = await fetch(LISTING_URL, {
-    headers: { 'User-Agent': UA, Accept: 'text/html' },
+    headers: BROWSER_HEADERS,
     cache: 'no-store',
     signal: AbortSignal.timeout(20_000),
   });
   if (!res.ok) throw new Error(`The DGHS listing page returned ${res.status}.`);
   const html = await res.text();
   return parseListingRows(html);
+}
+
+export async function fetchListing(): Promise<ListingEntry[]> {
+  if (listingCache && Date.now() - listingCache.at < LISTING_CACHE_MS) {
+    return listingCache.entries;
+  }
+  try {
+    const entries = await fetchListingOnce();
+    listingCache = { at: Date.now(), entries };
+    return entries;
+  } catch (err) {
+    // One retry: government servers occasionally drop a single connection
+    // without it meaning anything is actually down.
+    try {
+      const entries = await fetchListingOnce();
+      listingCache = { at: Date.now(), entries };
+      return entries;
+    } catch {
+      throw describeNetworkFailure(err);
+    }
+  }
 }
 
 export interface LocateResult {
@@ -97,11 +154,16 @@ export interface DownloadResult {
 }
 
 export async function downloadPdf(url: string): Promise<DownloadResult> {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': UA, Accept: 'application/pdf,*/*' },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(45_000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { ...BROWSER_HEADERS, Accept: 'application/pdf,*/*' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (err) {
+    throw describeNetworkFailure(err);
+  }
   if (!res.ok) {
     throw new NotPublishedError(`The DGHS file server returned ${res.status} for this file.`);
   }

@@ -6,6 +6,75 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.7.1, "fetch failed" diagnosed: DGHS unreachable from Vercel, not a code bug
+
+### What was reported
+
+The client saw the fetch fail with a raw "fetch failed" message on the live
+site, for a date (06/09/2026) that had worked minutes earlier.
+
+### What was found
+
+Reproduced it directly against production and checked Vercel's own function
+logs before touching any code:
+
+- `curl` from this sandbox to the DGHS listing URL: instant `200`, every time.
+- The same URL, called from the live Vercel deployment: a consistent ~10.8s
+  hang ending in a raw network-level failure, on every attempt (three
+  in a row, a few seconds apart — not a one-off blip).
+- The function log confirms only *one* outbound call was ever attempted (the
+  listing fetch) before the request died — it never got as far as the PDF
+  download step.
+
+DGHS's server (or a WAF in front of it) is not completing the connection
+from Vercel's egress right now, while it answers this sandbox's requests
+immediately. The most likely explanation is that this session's own
+extensive testing volume against the live source earlier today (v1.4.0
+onward) tripped a rate limit or temporary IP-level block on Vercel's shared
+egress range — DGHS's server behaviour is otherwise unchanged, and the
+scraping logic itself was working correctly as recently as the same session.
+This is **not a parsing or scraping bug**: the code that worked an hour ago
+is unchanged.
+
+### What was built regardless
+
+Whether or not this specific block is self-inflicted, "a government server
+occasionally won't answer this app's requests" is a real, standing risk this
+project flagged from its very first build. Made the failure mode itself
+better rather than only waiting it out:
+
+- `lib/dghs.ts`: network-level fetch failures (Node's `fetch` throws the bare
+  string `"fetch failed"` for a reset/refused/timed-out connection, which is
+  what the client saw verbatim) are now caught and rewritten into an
+  actionable message that says this isn't about the chosen date and points
+  at "Upload PDF" as the immediate workaround.
+- One automatic retry on the listing fetch, for a genuinely transient single
+  dropped connection (does not help a sustained block like the one observed,
+  but costs nothing and helps ordinary flakiness).
+- A 5-minute in-memory cache on the listing fetch, best-effort across
+  serverless invocations, to cut down repeat hits to DGHS from normal
+  "Fetch report" clicks — lower request volume is directly relevant if the
+  cause here really is rate-limiting.
+
+### Verified
+
+| What | How | Result |
+|---|---|---|
+| Reachability from this sandbox | `curl` the listing URL directly | 200, ~0.1–0.2s, every time |
+| Reachability from Vercel | `curl` the live `/api/report` endpoint, 3x with delays | 502 `{"error":"fetch failed"}`, ~10.8s, every time — consistent, not intermittent |
+| Vercel function log | Inspected the request detail panel | Exactly one external call attempted (the listing GET), no second call to a PDF, confirming the failure is at the very first network hop |
+| `npm run typecheck` / `npm run build` | — | Clean |
+
+### Open item
+
+If this doesn't clear on its own within a normal cooldown window, the next
+step is confirming whether it's Vercel's `sin1` (Singapore) region
+specifically being blocked (in which case switching the pinned region in
+`vercel.json` is a one-line fix) or a broader "block known cloud/hosting
+ASNs" WAF rule (in which case no Vercel region change would help, and the
+fetch path would need to run somewhere with residential/non-cloud egress —
+a materially bigger change). Not enough evidence yet to tell which.
+
 ## 2026-09-08 — v1.7.0, six download formats, corrected ঢাকা বিভাগ, signature everywhere
 
 ### Three client requests
