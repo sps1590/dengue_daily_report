@@ -6,6 +6,38 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.9.2, "Prepared by" footer note
+
+### What changed
+
+The client asked for a faint "Shahriar" watermark on every downloaded
+report, then asked to remove it minutes later before it ever reached
+production — implemented (CSS text layer for HTML/Word/PDF/Image, an
+`addBackgroundImage` PNG for both Excel exports, canvas-generated once via
+the browser with no new dependency) and fully reverted in the same session;
+`lib/watermark.ts` never shipped.
+
+What did ship: a small "Prepared by: MIS Expert, NMEP" line under the
+signature block, in English exactly as given (not run through the Bangla
+dictionary — this is a Western-style attribution, not part of the
+government sheet's own wording). Added in every place the signature already
+appears, so it can't drift out of sync with it: `officialReportBodyHtml`
+(HTML + Word), `OfficialReport.tsx`'s on-screen JSX (which the Image/PDF
+export captures via html2canvas), and both Excel builders (`lib/excel.ts`
+and `lib/export-official-excel.ts`) as a small italic gray cell below the
+existing signatory lines.
+
+### Verified
+
+Captured the live on-screen element via html2canvas (the same path the
+Image download uses) and visually confirmed both the watermark's absence
+and the footer note's presence; checked the HTML download's blob text the
+same way. Read both Excel exports back with `exceljs`: `getBackgroundImageId()`
+is `undefined` on both, and the "Prepared by" cell is present with the
+intended font on both. Typecheck and a full production build both clean.
+
+---
+
 ## 2026-09-08 — v1.9.1, thinner, more realistic signature
 
 ### What was reported

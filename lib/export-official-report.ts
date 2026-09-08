@@ -126,6 +126,7 @@ export const OFFICIAL_REPORT_CSS = `
 .official-report .signature-cursive{font-family:"Mrs Saint Delafield","Petit Formal Script",cursive;font-weight:400;font-size:46px;line-height:1;color:#1a1a2e;display:inline-block;transform:rotate(-3deg);}
 .official-report .signature-date{margin-top:2px;font-size:13px;}
 .official-report .signature-role{margin-top:2px;font-size:13px;}
+.official-report .prepared-by{margin-top:18px;font-size:12px;text-align:right;color:#555555;}
 `;
 
 /** Row + subtotal markup shared by the on-screen component and this export. */
@@ -228,6 +229,7 @@ function officialReportBodyHtml(m: OfficialReportModel): string {
     <p class="signature-role">${LABELS.signatoryOrg.unicode}</p>
     <p class="signature-role">${LABELS.signatoryAddr.unicode}</p>
   </div>
+  <p class="prepared-by">Prepared by: MIS Expert, NMEP</p>
 </div>`;
 }
 

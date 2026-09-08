@@ -225,6 +225,7 @@ export function OfficialReport({ report }: { report: DengueReport }) {
             <p className="signature-role">{LABELS.signatoryOrg.unicode}</p>
             <p className="signature-role">{LABELS.signatoryAddr.unicode}</p>
           </div>
+          <p className="prepared-by">Prepared by: MIS Expert, NMEP</p>
         </div>
       </div>
 

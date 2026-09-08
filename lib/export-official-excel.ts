@@ -182,6 +182,9 @@ export async function buildOfficialReportWorkbook(report: DengueReport, script: 
   set(`G${sigStart + 3}`, pick(LABELS.signatoryOrg, script), { font: sigTextFont, alignment: { horizontal: 'center' } });
   set(`G${sigStart + 4}`, pick(LABELS.signatoryAddr, script), { font: sigTextFont, alignment: { horizontal: 'center' } });
 
+  const preparedByFont: Partial<ExcelJS.Font> = { name: 'IBM Plex Sans', size: 10, italic: true, color: { argb: 'FF555555' } };
+  set(`G${sigStart + 6}`, 'Prepared by: MIS Expert, NMEP', { font: preparedByFont, alignment: { horizontal: 'center' } });
+
   ws.pageSetup = {
     paperSize: 9,
     orientation: 'portrait',
