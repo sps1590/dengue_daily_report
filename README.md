@@ -44,12 +44,19 @@ Excel/report/brief/Dashboard pipeline.
 
 ### A real data-availability limit, not a bug
 
-DGHS's current press release publishes admissions and deaths per division —
-both in the last 24 hours and cumulative since 01 January — but **not**
-discharges or "currently admitted" broken down by division, only as national
-totals. Every division row therefore shows `—` in those two columns; the
-totals row shows the real national figures instead of a sum of blanks. See
-`docs/PROGRESS.md` (v1.4.0) for what was checked before settling on this.
+DGHS's press release charts admissions and deaths per division on page one,
+but discharged and "currently admitted" per division only show up much
+further down the same PDF, in a district-by-district table that rolls up into
+each division's own grand-total row (`lib/parse.ts`'s
+`districtTableDivisionTotals`). That table is read too, matching each
+division's grand-total row by its 24-hour admission figure (cross-checked
+against its cumulative admitted figure, since a smaller district subtotal can
+otherwise coincidentally share the same 24-hour count). The one place this
+still falls short: Dhaka North and South City Corporation are never broken
+out from each other in that table either, only as one combined "ঢাকা মহানগর"
+figure — so those two rows still show `—` individually, and the combined
+figure is folded into the ঢাকা বিভাগ row of the official report instead. See
+`docs/PROGRESS.md` for what was checked before settling on this.
 
 ---
 

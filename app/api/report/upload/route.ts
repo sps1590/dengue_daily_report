@@ -89,6 +89,7 @@ export async function POST(req: Request) {
       comparison,
       extraction: { method, confidence, notes: notes.filter(Boolean) },
       rawText: text.slice(0, 20_000),
+      dhakaCityDischarged: pattern.dhakaCityCombined ?? null,
     };
 
     return NextResponse.json(report);

@@ -73,6 +73,15 @@ export interface DengueReport {
   };
   /** Raw PDF text, kept so the analyst can check anything that looks wrong. */
   rawText?: string;
+  /**
+   * Dhaka North + South City Corporation combined discharged/currently-admitted,
+   * read from the PDF's district-level tables. The two corporations are never
+   * broken out from each other there — only their combined "ঢাকা মহানগর" row
+   * exists — so `rows` leaves DHAKA_NORTH_CITY/DHAKA_SOUTH_CITY's discharged
+   * and currentlyAdmitted `null` rather than guessing a split; this combined
+   * figure is what completes the merged ঢাকা বিভাগ row on the official report.
+   */
+  dhakaCityDischarged?: { discharged: number; currentlyAdmitted: number } | null;
 }
 
 export interface ManagementBrief {

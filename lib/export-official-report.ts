@@ -53,7 +53,19 @@ export function buildOfficialReportModel(report: DengueReport): OfficialReportMo
       const parts = DHAKA_COMBINED_KEYS.map((k) => report.rows.find((r) => r.key === k)).filter(
         (r): r is RegionRow => r !== undefined,
       );
-      row = { key, ...sumRows(parts) };
+      const summed = sumRows(parts);
+      // Dhaka North/South City Corporation's discharged/currentlyAdmitted stay
+      // `null` on their own rows (the source never splits the two), so the sum
+      // above only ever carries Dhaka Division's own out-of-CC figure. The
+      // city pair's combined figure — when the PDF's district table had it —
+      // is added on top here, rather than attributed to either corporation.
+      const city = report.dhakaCityDischarged;
+      row = {
+        key,
+        ...summed,
+        discharged: city ? (summed.discharged ?? 0) + city.discharged : summed.discharged,
+        currentlyAdmitted: city ? (summed.currentlyAdmitted ?? 0) + city.currentlyAdmitted : summed.currentlyAdmitted,
+      };
     } else {
       row = report.rows.find((r) => r.key === key) ?? {
         key,

@@ -6,6 +6,55 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.8.0, per-division discharged/currently-admitted recovered from the PDF
+
+### What was reported
+
+The client noticed that every division row in the official report showed `—`
+for the last two columns (discharged, currently admitted) except the
+সর্বমোট totals row, and asked for that row-level data to be pulled from the
+source PDF instead of left blank.
+
+### What was found
+
+`lib/parse.ts` only ever read the BI-dashboard's page-one charts, which give
+admitted/deaths per division but never discharged/currently-admitted. Those
+two figures for the day *are* in the PDF — much further down, in a long
+district-by-district table that rolls each district up into a
+"বিভাগের সর্বমোট" (division grand total) row carrying exactly those two
+columns. Verified against the live 06/09/2026 PDF: every one of the eight
+division grand-total rows was found and summed to the press release's own
+national totals (discharged: 39,479 matched exactly; currently-admitted:
+2,995 vs. the chart's 2,994, a pre-existing 1-unit discrepancy between DGHS's
+own two internal tables, not a parsing error — deaths shows the same 116 vs
+117 split).
+
+Matching a division's grand-total row by its 24-hour admission figure alone
+was not unique on the first pass: a Mymensingh district subtotal and
+Rangpur's actual division total both summed to 56, and a Satkhira district
+subtotal happened to equal Sylhet's national 9 — both were initially
+misattributed. Fixed by also preferring whichever same-total candidate's
+cumulative admitted figure lands closest to that division's already-known
+chart total, which resolved both collisions correctly and left every other
+(unambiguous) division unaffected.
+
+Dhaka North and South City Corporation are still never broken out from each
+other in that table — only their combined "ঢাকা মহানগর" row exists — so
+`DengueReport.dhakaCityDischarged` carries that combined figure separately,
+and `buildOfficialReportModel` adds it onto the merged ঢাকা বিভাগ row rather
+than attributing it to either corporation individually. Their rows in the
+plain division table (`SheetTable`) correctly still show `—` for these two
+columns, since the source genuinely doesn't split them.
+
+### Verified
+
+Live 06/09/2026 report via the dev server: all 8 non-Dhaka-city rows and the
+combined ঢাকা বিভাগ row now show real figures; the eight rows' discharged sum
+to the national total exactly (39,479); typecheck clean; confirmed on-screen
+in the Official Report table via the browser.
+
+---
+
 ## 2026-09-08 — v1.7.1, "fetch failed" diagnosed: DGHS unreachable from Vercel, not a code bug
 
 ### What was reported

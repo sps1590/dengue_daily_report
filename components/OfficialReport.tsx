@@ -231,8 +231,9 @@ export function OfficialReport({ report }: { report: DengueReport }) {
       <p className="border-t border-rule px-5 py-3 text-micro leading-relaxed text-muted">
         ঢাকা বিভাগ combines Dhaka Division, Dhaka North City Corporation, and Dhaka South City Corporation into one
         row, so সর্বমোট is both the press release&apos;s real national total and the sum of the eight rows above, for
-        every column with real per-division data. Discharged and currently-admitted are national totals throughout;
-        DGHS&apos;s current press release does not publish those two per division.
+        every column. Discharged and currently-admitted per division come from the PDF&apos;s district-level tables
+        further down the report; Dhaka North and South City Corporation are only published there as one combined
+        figure, which is folded into the ঢাকা বিভাগ row rather than split between the two.
       </p>
     </section>
   );

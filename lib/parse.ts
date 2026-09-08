@@ -68,6 +68,14 @@ export interface PatternResult {
   comparison: YearComparison[];
   confidence: number;
   notes: string[];
+  /**
+   * Dhaka North + South City Corporation combined discharged/currently-admitted,
+   * when the district-level table further down the PDF published it. The two
+   * corporations are never split from each other there, so this is the
+   * combined figure rather than an attempt at guessing a division between them
+   * — see `districtTableDivisionTotals` in this file.
+   */
+  dhakaCityCombined?: { discharged: number; currentlyAdmitted: number } | null;
 }
 
 export function parseReportText(rawText: string, reportYear: number): PatternResult {
@@ -280,6 +288,85 @@ function chartValuesByArea(text: string, heading: string, notes: string[]): Part
   return out;
 }
 
+/**
+ * Further down the same PDF, past the charts, sits a second, much longer
+ * table: hospital-by-hospital and then district-by-district figures, rolling
+ * up into a "বিভাগের সর্বমোট" (division grand total) row for each division.
+ * That row is the only place in the document discharged and
+ * currently-admitted are broken out below the national level — the charts
+ * above only give admitted/deaths per division.
+ *
+ * Each data row (hospital, district, or division) has the same shape once
+ * the leading serial number and name are dropped: government admitted +
+ * private admitted = total admitted (last 24h), and discharged + currently
+ * admitted + deaths = cumulative total admitted. A division's grand-total row
+ * is a candidate whose "total admitted last 24h" figure matches the same
+ * division's figure already read off the chart above — but that alone is not
+ * unique: a smaller district or hospital subtotal elsewhere in the document
+ * can coincidentally total the same 24h figure (observed live: a Mymensingh
+ * district subtotal and Rangpur's actual division total both summed to 56).
+ * Disambiguated by also preferring whichever matching candidate's cumulative
+ * total-admitted figure lands closest to that division's cumulative figure
+ * already read off the chart above, since a coincidental subtotal is always
+ * for a much smaller area and so a very different cumulative count.
+ *
+ * Dhaka North and South City Corporation are never broken out from each
+ * other in this table — the hospital list rolls straight up into one
+ * "ঢাকা মহানগর" (Dhaka City) combined row — so that combined figure is
+ * matched separately (by DNCC's + DSCC's 24h admissions and cumulative
+ * totals) rather than forced onto either corporation individually.
+ */
+function districtTableDivisionTotals(
+  text: string,
+  admitted24hByRegion: Partial<Record<RegionKey, number>>,
+  totalAdmittedByRegion: Partial<Record<RegionKey, number>>,
+): {
+  byRegion: Partial<Record<RegionKey, { discharged: number; currentlyAdmitted: number }>>;
+  dhakaCityCombined: { discharged: number; currentlyAdmitted: number } | null;
+} {
+  const candidates: number[][] = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const nums = numbersIn(rawLine);
+    if (nums.length < 7) continue;
+    const [govt, priv, total, cumulative, deaths, discharged, currentlyAdmitted] = nums.slice(-7);
+    if (govt + priv !== total) continue;
+    if (discharged + currentlyAdmitted + deaths !== cumulative) continue;
+    candidates.push([govt, priv, total, cumulative, deaths, discharged, currentlyAdmitted]);
+  }
+
+  const bestMatch = (admit24hTarget: number, cumulativeTarget: number | undefined): number[] | null => {
+    const matches = candidates.filter((c) => c[2] === admit24hTarget);
+    if (!matches.length) return null;
+    if (matches.length === 1 || cumulativeTarget === undefined) return matches[0];
+    return matches.reduce((best, c) =>
+      Math.abs(c[3] - cumulativeTarget) < Math.abs(best[3] - cumulativeTarget) ? c : best,
+    );
+  };
+
+  const byRegion: Partial<Record<RegionKey, { discharged: number; currentlyAdmitted: number }>> = {};
+  for (const key of REGION_ORDER) {
+    if (key === 'DHAKA_NORTH_CITY' || key === 'DHAKA_SOUTH_CITY') continue;
+    const target = admitted24hByRegion[key];
+    if (target === undefined) continue;
+    const hit = bestMatch(target, totalAdmittedByRegion[key]);
+    if (hit) byRegion[key] = { discharged: hit[5], currentlyAdmitted: hit[6] };
+  }
+
+  let dhakaCityCombined: { discharged: number; currentlyAdmitted: number } | null = null;
+  const dncc = admitted24hByRegion.DHAKA_NORTH_CITY;
+  const dscc = admitted24hByRegion.DHAKA_SOUTH_CITY;
+  if (dncc !== undefined && dscc !== undefined) {
+    const cumulativeTarget =
+      totalAdmittedByRegion.DHAKA_NORTH_CITY !== undefined && totalAdmittedByRegion.DHAKA_SOUTH_CITY !== undefined
+        ? totalAdmittedByRegion.DHAKA_NORTH_CITY + totalAdmittedByRegion.DHAKA_SOUTH_CITY
+        : undefined;
+    const hit = bestMatch(dncc + dscc, cumulativeTarget);
+    if (hit) dhakaCityCombined = { discharged: hit[5], currentlyAdmitted: hit[6] };
+  }
+
+  return { byRegion, dhakaCityCombined };
+}
+
 export function parseBiPressRelease(rawText: string, _reportYear: number): PatternResult {
   const text = normalise(rawText);
   const notes: string[] = [];
@@ -301,6 +388,8 @@ export function parseBiPressRelease(rawText: string, _reportYear: number): Patte
     notes,
   );
 
+  const districtTotals = districtTableDivisionTotals(text, admitted24h, totalAdmitted);
+
   // Divisions with zero cases for a metric are simply absent from that
   // metric's chart, not published as zero — so an area missing from e.g.
   // deaths24h genuinely means 0, not "unknown". Only totalAdmitted (every
@@ -312,8 +401,8 @@ export function parseBiPressRelease(rawText: string, _reportYear: number): Patte
     deaths24h: deaths24h[key] ?? 0,
     totalAdmitted: totalAdmitted[key] ?? null,
     totalDeaths: totalDeaths[key] ?? 0,
-    discharged: null,
-    currentlyAdmitted: null,
+    discharged: districtTotals.byRegion[key]?.discharged ?? null,
+    currentlyAdmitted: districtTotals.byRegion[key]?.currentlyAdmitted ?? null,
   }));
 
   const nationalAdmitted24h = nationalValueAfter(text, 'Dengue cases of last 24 hours');
@@ -339,9 +428,19 @@ export function parseBiPressRelease(rawText: string, _reportYear: number): Patte
       : null;
 
   if (dischargedCumulative === null) notes.push('National cumulative discharge figure was not found.');
-  notes.push(
-    'Per-division "discharged" and "currently admitted" are not published in this report; only the national totals are real figures.',
-  );
+  const districtRegionsFound = Object.keys(districtTotals.byRegion).length;
+  if (districtRegionsFound > 0) {
+    notes.push(
+      `Per-division "discharged" and "currently admitted" were read from the PDF's district-level tables for ${districtRegionsFound} of ${REGION_ORDER.length - 2} divisions` +
+        (districtTotals.dhakaCityCombined
+          ? '; Dhaka North and South City Corporation are only published there as one combined figure, folded into the combined ঢাকা বিভাগ row.'
+          : '.'),
+    );
+  } else {
+    notes.push(
+      'Per-division "discharged" and "currently admitted" could not be matched in this report; only the national totals are real figures.',
+    );
+  }
 
   const totals: Omit<RegionRow, 'key'> = {
     admitted24h: nationalAdmitted24h,
@@ -366,7 +465,7 @@ export function parseBiPressRelease(rawText: string, _reportYear: number): Patte
   // This document carries no year-on-year comparison table of its own.
   const comparison: YearComparison[] = [];
 
-  return { rows, totals, comparison, confidence, notes };
+  return { rows, totals, comparison, confidence, notes, dhakaCityCombined: districtTotals.dhakaCityCombined };
 }
 
 export function sumRows(rows: RegionRow[]): Omit<RegionRow, 'key'> {
