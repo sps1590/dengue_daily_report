@@ -12,7 +12,7 @@ import './globals.css';
  * keep the same CSS variable names.
  */
 const FONT_HREF =
-  'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Serif+Bengali:wght@400;600&family=Caveat:wght@600&display=swap';
+  'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Serif+Bengali:wght@400;600&family=Mrs+Saint+Delafield&display=swap';
 
 export const metadata: Metadata = {
   title: 'Dengue Daily — DGHS press release to NMEP workbook',

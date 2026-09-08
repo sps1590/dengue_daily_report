@@ -6,6 +6,46 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.9.1, thinner, more realistic signature
+
+### What was reported
+
+The client asked for the signature to look thinner and more human — either
+by adjusting the existing text signature or by pasting in a cropped image of
+a real signature (no image was actually attached, so the text route was
+taken).
+
+### What changed
+
+`Caveat` (weight 600) reads as a thick, marker-like script rather than a pen
+signature. Replaced with `Mrs Saint Delafield` — thin single-weight strokes,
+much closer to real handwriting — across every export that can load a web
+font (on-screen, HTML, PDF, Image): `app/layout.tsx`'s global font link and
+`lib/export-official-report.ts`'s `OFFICIAL_REPORT_CSS` and standalone-HTML
+font link. Added a slight `rotate(-3deg)` and a dark-ink colour (`#1a1a2e`
+instead of pure black) rather than plain upright black text, since a real
+signature is never perfectly level or exactly the same black as the printed
+text around it.
+
+Word and Excel can't load web fonts, so their fallback scripts changed too:
+Word's override now tries `Monotype Corsiva` before `Segoe Script` (Corsiva
+is the thinner, more classically signature-like of the two, and Word doesn't
+reliably honour the `rotate()` transform so that's dropped in its override).
+Excel's signature font (`lib/export-official-excel.ts`) switched from `Segoe
+Script` to `Monotype Corsiva` outright, dropping the `italic` flag Corsiva
+doesn't need.
+
+### Verified
+
+Dev server: `document.fonts.check` confirms `Mrs Saint Delafield` actually
+loads and the computed style shows the intended font, weight, colour and
+rotation on the rendered `.signature-cursive` element. Generated the Excel
+export and read the signature cell's font back via `exceljs`: confirmed
+`Monotype Corsiva`, size 20. Typecheck and a full production build both
+clean.
+
+---
+
 ## 2026-09-08 — v1.9.0, archive source for releases on/before 03/09/2026
 
 ### What was reported

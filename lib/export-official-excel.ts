@@ -164,14 +164,17 @@ export async function buildOfficialReportWorkbook(report: DengueReport, script: 
   set(`A${noteRow}`, pick(LABELS.sourceNote, script), { font: base(FONT_SIZE, true), alignment: { horizontal: 'left', vertical: 'middle', wrapText: true } });
 
   // Excel has no way to load a web font, so the signature uses a script font
-  // that ships with Windows/Office instead of the browser exports' `Caveat`.
+  // that ships with Windows/Office instead of the browser exports'
+  // `Mrs Saint Delafield`. Monotype Corsiva is the thinnest classic
+  // signature-style script Office ships — already slanted, so it doesn't
+  // need the `italic` flag on top.
   // The designation lines are Unicode Bangla in the dictionary regardless of
   // script (the reference workbook keeps this block in Unicode even in its
   // legacy export — see lib/excel.ts), so they always need a Unicode-capable
   // font: SutonnyMJ applied to real Unicode text renders as mojibake, not
   // just the wrong glyphs.
   const sigStart = noteRow + 3;
-  const sigCursiveFont: Partial<ExcelJS.Font> = { name: 'Segoe Script', size: 16, italic: true };
+  const sigCursiveFont: Partial<ExcelJS.Font> = { name: 'Monotype Corsiva', size: 20 };
   const sigTextFont: Partial<ExcelJS.Font> = { name: 'Nirmala UI', size: FONT_SIZE };
   set(`G${sigStart}`, 'Anahar', { font: sigCursiveFont, alignment: { horizontal: 'center' } });
   set(`G${sigStart + 1}`, m.downloadDate, { font: sigTextFont, alignment: { horizontal: 'center' } });

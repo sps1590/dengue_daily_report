@@ -123,7 +123,7 @@ export const OFFICIAL_REPORT_CSS = `
 .official-report tr.total td{font-weight:700;}
 .official-report .source-note{margin-top:10px;font-size:13px;text-align:left;}
 .official-report .signature-block{margin-top:36px;text-align:right;}
-.official-report .signature-cursive{font-family:"Caveat","Dancing Script",cursive;font-size:34px;line-height:1;}
+.official-report .signature-cursive{font-family:"Mrs Saint Delafield","Petit Formal Script",cursive;font-weight:400;font-size:46px;line-height:1;color:#1a1a2e;display:inline-block;transform:rotate(-3deg);}
 .official-report .signature-date{margin-top:2px;font-size:13px;}
 .official-report .signature-role{margin-top:2px;font-size:13px;}
 `;
@@ -245,7 +245,7 @@ export function officialReportToHtml(report: DengueReport): string {
 <html lang="bn">
 <meta charset="utf-8">
 <title>ডেঙ্গু প্রতিবেদন — ${report.date}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mrs+Saint+Delafield&display=swap">
 <style>
   @page { size: A4; margin: 10mm; }
   * { box-sizing: border-box; }
@@ -264,11 +264,12 @@ ${officialReportBodyHtml(m)}
  * text rendering elsewhere in this app, since Word renders the same HTML/CSS
  * text this page does rather than re-drawing glyphs from an embedded font.
  *
- * Word's HTML importer does not fetch external stylesheets, so the `Caveat`
- * web font the browser-facing exports use for the signature never loads —
- * the override below points it at script fonts that ship with Windows/Office
- * instead, so the signature still renders as cursive rather than falling
- * back to the body's plain sans-serif.
+ * Word's HTML importer does not fetch external stylesheets, so the
+ * `Mrs Saint Delafield` web font the browser-facing exports use for the
+ * signature never loads — the override below points it at the thinnest
+ * classic signature-style script font that ships with Windows/Office
+ * instead (`Monotype Corsiva`), and drops the `rotate()` transform, which
+ * Word's renderer does not reliably honour.
  */
 export function officialReportToWordHtml(report: DengueReport): string {
   const m = buildOfficialReportModel(report);
@@ -281,7 +282,7 @@ export function officialReportToWordHtml(report: DengueReport): string {
 <style>
   @page { size: 21cm 29.7cm; margin: 1.5cm; }
   ${OFFICIAL_REPORT_CSS}
-  .official-report .signature-cursive{font-family:"Segoe Script","Bradley Hand","Lucida Handwriting",cursive;}
+  .official-report .signature-cursive{font-family:"Monotype Corsiva","Segoe Script","Lucida Handwriting",cursive;font-size:40px;transform:none;}
 </style>
 </head>
 <body>
