@@ -66,7 +66,7 @@ export function isPlausibleReportDate(iso: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
   const t = Date.parse(`${iso}T00:00:00Z`);
   if (Number.isNaN(t)) return false;
-  const earliest = Date.parse('2023-01-01T00:00:00Z');
+  const earliest = Date.parse('2019-01-01T00:00:00Z');
   const latest = Date.now() + 6 * 60 * 60 * 1000;
   return t >= earliest && t <= latest;
 }

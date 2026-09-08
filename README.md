@@ -10,8 +10,8 @@ Pick a date. The app finds that day's press release on the DGHS portal, reads th
 
 | Step | What happens |
 |---|---|
-| 1 | DGHS's dengue-press-release listing (`dghs.gov.bd/pages/miscellaneous-infos`, filtered to that category) is fetched and scanned for a row matching the chosen date |
-| 2 | That row's own attached PDF link is downloaded and validated |
+| 1 | Two sources, picked by date: on/before 03/09/2026, the dengue press-release **archive** page (`dghs.gov.bd/pages/static-pages/dengue-press-release-...`, back to 27/08/2019); after that, the **live** listing (`dghs.gov.bd/pages/miscellaneous-infos`, filtered to that category) — the live listing dropped everything on/before the cutoff at some point, so only the archive still carries those dates |
+| 2 | That entry's own attached PDF link is downloaded and validated |
 | 3 | The PDF — a BI-dashboard export, not a plain table — is parsed: per-division chart figures matched by position, national totals read directly (see `lib/parse.ts`'s `parseBiPressRelease`) |
 | 4 | Below 60% confidence, or on an unrecognised layout, the model re-reads the attached PDF |
 | 5 | Figures, charts, the Excel export, the official-report replica and the brief all become available |

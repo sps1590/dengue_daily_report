@@ -6,6 +6,71 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-09-08 — v1.9.0, archive source for releases on/before 03/09/2026
+
+### What was reported
+
+Fetching 03/09/2026 or earlier showed "This date did not produce a report —
+DGHS's current listing does not carry a dengue press release for this date.
+Dates currently listed: 2026-09-08, 2026-09-06, 2026-09-05, 2026-09-04." The
+client also asked that older, current, and upcoming releases all be
+reachable — pointing at a second DGHS URL, a static archive page, for the
+older ones.
+
+### What was found
+
+The live `miscellaneous-infos` listing (`lib/dghs.ts`'s `fetchListing`) had
+simply dropped every entry on/before 03/09/2026 — DGHS's own doing, not a
+bug in this app. The archive page the client pointed at
+(`dghs.gov.bd/pages/static-pages/dengue-press-release-gxrgtg-...`) does carry
+those dates, back to 27/08/2019, but not in ordinary server-rendered HTML: the
+entire link list sits inside a custom `<rt-renderer encoded-content="...">`
+element, base64-encoded, and *not* as one contiguous block — several
+independently-encoded chunks joined with `;`. Decoding chunk-by-chunk as raw
+bytes and concatenating before the final UTF-8 decode avoids corrupting a
+multi-byte Bangla character that lands on a chunk boundary.
+
+The archive was clearly maintained by hand over 7 years: the linked PDF
+filenames follow at least five different naming schemes (`vpr/YYYYMMDD_
+dengue_all.pdf` for the last year or so; `Dengue_YYYYMMDD.pdf`, `Dengue_
+YYYY_MM_DD.pdf`, a bare `YYYYMMDD.pdf`, and `Dengue_DD_MM_YY.pdf` for
+various older stretches). Dates are read from each PDF's own filename — never
+from the link's visible Bangla text — since the filename is plain ASCII and
+unaffected by the chunk-boundary risk above. Verified against the live page:
+1878 of 1879 linked files matched one of the five patterns; the one holdout's
+filename doesn't encode a date at all and is simply skipped.
+
+`lib/dghs.ts`'s `locateRelease` now routes by date: on/before
+`ARCHIVE_CUTOFF_DATE` ('2026-09-03') goes to the new `fetchArchiveListing`;
+after it, to the existing live `fetchListing`, unchanged. The archive fetch
+gets the same retry-once + `describeNetworkFailure` treatment as the live
+listing, plus its own 30-minute cache (longer than the live listing's 5,
+since the archive changes at most once a day and only right at the cutoff).
+The date picker's minimum and `isPlausibleReportDate`'s earliest bound both
+moved from 2023-01-01 to 2019-01-01 to match.
+
+Not addressed here: the 2019-era press releases use a completely different
+plain-table PDF layout than the BI-dashboard export the current parser
+(`parseBiPressRelease`) targets. A spot check on 27/08/2019 located and
+downloaded the file correctly but the legacy `parseReportText` fallback
+mis-parsed it (95% reported confidence on numbers that don't hold together,
+e.g. admitted-24h reading higher than cumulative-admitted) — a parser-quality
+problem for that older layout, separate from the archive-access problem this
+entry fixes, flagged as a follow-up rather than fixed here.
+
+### Verified
+
+Dev server: 2026-09-03 (the reported failing date) now returns a full report
+via the archive URL (`vpr/20260903_dengue_all.pdf`) instead of the "did not
+produce a report" error — confirmed end-to-end in the browser UI, not just
+via curl. 2026-08-15 and 2019-08-27 (oldest/legacy-format entry) both locate
+and download correctly. 2026-09-06 (after the cutoff) still routes to the
+live listing, unchanged. An unpublished archive-range date (2020-02-15)
+returns a short, sane 404 instead of the live listing's "dump every date"
+message. Typecheck clean.
+
+---
+
 ## 2026-09-08 — v1.8.0, per-division discharged/currently-admitted recovered from the PDF
 
 ### What was reported

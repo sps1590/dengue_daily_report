@@ -26,7 +26,7 @@ export function DateControl({ date, onDateChange, onFetch, busy, maxDate }: Prop
         type="date"
         value={date}
         max={maxDate}
-        min="2023-01-01"
+        min="2019-01-01"
         onChange={(e) => onDateChange(e.target.value)}
         className="mt-1.5 w-full rounded-sheet border border-rule bg-white px-3 py-2 text-sm text-ink"
       />

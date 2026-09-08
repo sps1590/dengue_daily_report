@@ -11,6 +11,18 @@ import { toAsciiDigits } from './bengali';
 export const LISTING_URL =
   'https://dghs.gov.bd/pages/miscellaneous-infos?filters=%7B%22miscellaneous_info_type%22%3A%226a9cf0471fa8cd87d1f50227%22%7D';
 
+/**
+ * The miscellaneous-infos listing above only carries recent releases (it
+ * dropped everything on/before 03/09/2026 at some point). Older releases —
+ * back to 27/08/2019 — live on this separate static page instead, under a
+ * completely different markup shape (see `fetchArchiveListing`).
+ */
+export const ARCHIVE_LISTING_URL =
+  'https://dghs.gov.bd/pages/static-pages/dengue-press-release-gxrgtg-6a9eb4cc7a024513d1b8c896';
+
+/** Dates on or before this go to the archive page; anything after it goes to the live listing. */
+export const ARCHIVE_CUTOFF_DATE = '2026-09-03';
+
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
@@ -123,6 +135,108 @@ export async function fetchListing(): Promise<ListingEntry[]> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Archive listing (releases on/before ARCHIVE_CUTOFF_DATE)
+// ---------------------------------------------------------------------------
+
+/**
+ * The archive page's link list isn't in its server-rendered HTML at all — the
+ * whole thing sits inside a custom `<rt-renderer encoded-content="...">`
+ * element, as base64. That attribute is not one contiguous base64 block: it's
+ * several independently-encoded chunks joined with ";", each ending in its
+ * own "=" padding. Decoding chunk-by-chunk as raw bytes and concatenating
+ * *before* the final UTF-8 decode (rather than decoding each chunk to a
+ * string and concatenating strings) avoids corrupting a multi-byte Bangla
+ * character that happens to fall across a chunk boundary.
+ */
+function decodeRtRenderer(html: string): string | null {
+  const m = html.match(/<rt-renderer[^>]*\bencoded-content="([^"]*)"/);
+  if (!m) return null;
+  const buffers: Buffer[] = [];
+  for (const chunk of m[1].split(';')) {
+    if (!chunk) continue;
+    try {
+      buffers.push(Buffer.from(chunk, 'base64'));
+    } catch {
+      // Skip a malformed chunk rather than fail the whole page.
+    }
+  }
+  return Buffer.concat(buffers).toString('utf-8');
+}
+
+/**
+ * The archive spans 2019-2026 and was clearly maintained by hand: the last
+ * ~year of entries link a uniform `vpr/YYYYMMDD_dengue_all.pdf`, but older
+ * ones use at least four different naming schemes. Read the date from the
+ * PDF's own filename — never from the link's visible Bangla text — since the
+ * filename is plain ASCII and unaffected by the chunk-boundary risk above.
+ * Verified against the live archive: 1878 of 1879 linked files matched one of
+ * these patterns; the one holdout uses a filename that doesn't encode a date
+ * at all and is simply skipped.
+ */
+function dateFromArchiveFilename(url: string): string | null {
+  let m = url.match(/\/(\d{4})(\d{2})(\d{2})_dengue_all\.pdf(?:[?#]|$)/i);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = url.match(/Dengue_(\d{4})(\d{2})(\d{2})\.pdf(?:[?#]|$)/i);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = url.match(/Dengue_(\d{4})_(\d{2})_(\d{2})\.pdf(?:[?#]|$)/i);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = url.match(/\/(\d{4})(\d{2})(\d{2})\.pdf(?:[?#]|$)/i);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = url.match(/Dengue_(\d{1,2})_(\d{1,2})_(\d{2})\.pdf(?:[?#]|$)/i);
+  if (m) return `20${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
+
+function parseArchiveEntries(decodedHtml: string): ListingEntry[] {
+  const out: ListingEntry[] = [];
+  const linkRe = /<a href="([^"]+\.pdf)">([^<]*)<\/a>/g;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(decodedHtml))) {
+    const [, pdfUrl, title] = m;
+    const date = dateFromArchiveFilename(pdfUrl);
+    if (!date) continue;
+    out.push({ date, title: title.trim(), pdfUrl });
+  }
+  return out;
+}
+
+let archiveCache: { at: number; entries: ListingEntry[] } | null = null;
+/** Changes at most once a day and only near the cutoff, so a longer cache than the live listing is safe. */
+const ARCHIVE_CACHE_MS = 30 * 60 * 1000;
+
+async function fetchArchiveListingOnce(): Promise<ListingEntry[]> {
+  const res = await fetch(ARCHIVE_LISTING_URL, {
+    headers: BROWSER_HEADERS,
+    cache: 'no-store',
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`The DGHS archive page returned ${res.status}.`);
+  const html = await res.text();
+  const decoded = decodeRtRenderer(html);
+  if (!decoded) throw new Error("The DGHS archive page's content block was not found.");
+  return parseArchiveEntries(decoded);
+}
+
+export async function fetchArchiveListing(): Promise<ListingEntry[]> {
+  if (archiveCache && Date.now() - archiveCache.at < ARCHIVE_CACHE_MS) {
+    return archiveCache.entries;
+  }
+  try {
+    const entries = await fetchArchiveListingOnce();
+    archiveCache = { at: Date.now(), entries };
+    return entries;
+  } catch (err) {
+    try {
+      const entries = await fetchArchiveListingOnce();
+      archiveCache = { at: Date.now(), entries };
+      return entries;
+    } catch {
+      throw describeNetworkFailure(err);
+    }
+  }
+}
+
 export interface LocateResult {
   url: string;
   label: string;
@@ -130,21 +244,30 @@ export interface LocateResult {
 }
 
 /**
- * Find the listing row for a given date. Unlike the old (dead) source, there
- * is no derivable URL here — the listing is the only way to find a given
- * day's PDF, and it currently only carries the entries DGHS has chosen to
- * keep published, not a full dated archive.
+ * Find a given date's release. Dates on/before ARCHIVE_CUTOFF_DATE come from
+ * the archive page; everything after it comes from the live miscellaneous-
+ * infos listing, which is the only one of the two that gets same-day updates.
  */
 export async function locateRelease(iso: string): Promise<LocateResult> {
-  const entries = await fetchListing();
+  const isArchive = iso <= ARCHIVE_CUTOFF_DATE;
+  const entries = isArchive ? await fetchArchiveListing() : await fetchListing();
   const hit = entries.find((e) => e.date === iso);
   if (!hit) {
+    if (isArchive) {
+      throw new NotPublishedError(
+        `DGHS's dengue press-release archive does not carry a release for this date (it covers ${entries[entries.length - 1]?.date ?? 'unknown'} through ${ARCHIVE_CUTOFF_DATE}, but not every day in that range was published).`,
+      );
+    }
     const available = entries.map((e) => e.date).join(', ') || 'none';
     throw new NotPublishedError(
       `DGHS's current listing does not carry a dengue press release for this date. Dates currently listed: ${available}.`,
     );
   }
-  return { url: hit.pdfUrl, label: hit.title, note: 'Matched on the DGHS miscellaneous-info listing.' };
+  return {
+    url: hit.pdfUrl,
+    label: hit.title,
+    note: isArchive ? 'Matched on the DGHS dengue press-release archive page.' : 'Matched on the DGHS miscellaneous-info listing.',
+  };
 }
 
 export interface DownloadResult {
