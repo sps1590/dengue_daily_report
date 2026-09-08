@@ -255,7 +255,7 @@ export async function buildWorkbook(
   set(`H${sigDate + 2}`, LABELS.signatoryOrg.unicode, { font: sigFont, alignment: centered });
   set(`H${sigDate + 3}`, LABELS.signatoryAddr.unicode, { font: sigFont, alignment: centered });
 
-  const preparedByFont: Partial<ExcelJS.Font> = { name: 'IBM Plex Sans', size: 10, italic: true, color: { argb: 'FF555555' } };
+  const preparedByFont: Partial<ExcelJS.Font> = { name: 'IBM Plex Sans', size: 10, italic: true, color: { argb: 'FFFFFBF7' } };
   set(`H${sigDate + 5}`, 'Prepared by: MIS Expert, NMEP', { font: preparedByFont, alignment: centered });
 
   // -- Print setup ----------------------------------------------------------
