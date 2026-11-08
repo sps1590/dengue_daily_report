@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Masthead } from '@/components/Masthead';
 import { DateControl } from '@/components/DateControl';
 import { UploadPdfForm } from '@/components/UploadPdfForm';
+import { DeathListPanel } from '@/components/DeathListPanel';
 import { Pipeline } from '@/components/Pipeline';
 import { FigureStrip } from '@/components/FigureStrip';
 import { SheetTable } from '@/components/SheetTable';
@@ -15,7 +16,7 @@ import { yesterdayInDhaka } from '@/lib/bengali';
 import { briefToHtml, downloadFile } from '@/lib/export-brief';
 import { downloadExcelFile } from '@/lib/download';
 import { saveBrief, saveReport } from '@/lib/history';
-import type { DengueReport, ManagementBrief, PipelineStep } from '@/lib/types';
+import type { DeathSummary, DengueReport, ManagementBrief, PipelineStep } from '@/lib/types';
 
 const STEPS: { id: PipelineStep['id']; label: string }[] = [
   { id: 'resolve', label: 'Convert the date to the Bengali label DGHS uses' },
@@ -35,6 +36,13 @@ export default function Page() {
   const [mode, setMode] = useState<'fetch' | 'upload'>('fetch');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [report, setReport] = useState<DengueReport | null>(null);
+  // The death list comes from a separate DGHS file, so it is held on its own
+  // and merged into the report for display, downloads and history.
+  const [deaths, setDeaths] = useState<DeathSummary | null>(null);
+  const reportView = useMemo(
+    () => (report ? { ...report, deaths: deaths ?? report.deaths ?? null } : null),
+    [report, deaths],
+  );
   const [steps, setSteps] = useState<PipelineStep[]>(
     STEPS.map((s) => ({ ...s, state: 'pending' })),
   );
@@ -54,6 +62,18 @@ export default function Page() {
     },
     [],
   );
+
+  // Saved whenever the report or its death list changes, so the Dashboard's
+  // re-downloads include the death table.
+  useEffect(() => {
+    if (reportView && reportView.rows.length) saveReport(reportView);
+  }, [reportView]);
+
+  // A death list belongs to one date: keep it across a re-fetch of that same
+  // date, drop it when a different day's report arrives.
+  const keepDeathsFor = useCallback((date: string) => {
+    setDeaths((prev) => (prev?.date && prev.date !== date ? null : prev));
+  }, []);
 
   const runFetch = useCallback(async () => {
     setFetching(true);
@@ -94,9 +114,8 @@ export default function Page() {
       );
       mark('compose', r.rows.length ? 'done' : 'skipped');
       setReport(r);
-      if (r.rows.length) {
-        saveReport(r);
-      } else {
+      keepDeathsFor(r.date);
+      if (!r.rows.length) {
         setFetchError('The release was downloaded but no figures could be read from it.');
       }
     } catch (e) {
@@ -105,7 +124,7 @@ export default function Page() {
     } finally {
       setFetching(false);
     }
-  }, [date, mark]);
+  }, [date, mark, keepDeathsFor]);
 
   const runUpload = useCallback(async () => {
     if (!uploadFile) return;
@@ -129,9 +148,8 @@ export default function Page() {
 
       const r = data as DengueReport;
       setReport(r);
-      if (r.rows.length) {
-        saveReport(r);
-      } else {
+      keepDeathsFor(r.date);
+      if (!r.rows.length) {
         setFetchError('The PDF was read but no figures could be found in it.');
       }
     } catch {
@@ -139,7 +157,7 @@ export default function Page() {
     } finally {
       setFetching(false);
     }
-  }, [date, uploadFile]);
+  }, [date, uploadFile, keepDeathsFor]);
 
   const downloadExcel = useCallback(
     async (script: 'legacy' | 'unicode') => {
@@ -225,6 +243,8 @@ export default function Page() {
               busy={fetching}
             />
           )}
+
+          <DeathListPanel report={report} deaths={deaths} onDeaths={setDeaths} />
 
           {report && (
             <section className="rounded-panel bg-card p-5 shadow-panel">
@@ -312,12 +332,12 @@ export default function Page() {
             </div>
           )}
 
-          {report && report.rows.length > 0 && (
+          {reportView && reportView.rows.length > 0 && (
             <>
-              <FigureStrip report={report} />
-              <SheetTable report={report} />
-              <OfficialReport report={report} />
-              <BurdenChart report={report} />
+              <FigureStrip report={reportView} />
+              <SheetTable report={reportView} />
+              <OfficialReport report={reportView} />
+              <BurdenChart report={reportView} />
               <BriefPanel
                 brief={brief}
                 busy={analysing}
@@ -328,8 +348,8 @@ export default function Page() {
                 onDownload={() =>
                   brief &&
                   downloadFile(
-                    `Dengue brief ${report.date}.html`,
-                    briefToHtml(report, brief),
+                    `Dengue brief ${reportView.date}.html`,
+                    briefToHtml(reportView, brief),
                     'text/html;charset=utf-8',
                   )
                 }

@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { FONT_FOR_SCRIPT, LABELS, REGION_LABELS, pick, type OutputScript } from './bijoy';
-import { buildOfficialReportModel } from './export-official-report';
+import { DEATH_TABLE_LABELS, buildOfficialReportModel } from './export-official-report';
 import type { DengueReport } from './types';
 
 /**
@@ -125,8 +125,64 @@ export async function buildOfficialReportWorkbook(report: DengueReport, script: 
   set(`G${totalRow}`, m.nationalDischarged, totalStyle);
   set(`H${totalRow}`, m.nationalCurrentlyAdmitted, totalStyle);
 
+  // -- Table 1b: district-wise deaths (only when a death list was uploaded) ----
+  // The wording has no verified SutonnyMJ spelling, so heading, column titles
+  // and district names are Unicode in Nirmala UI in both script variants (as
+  // with the signature block below). The counts are real numbers, in the
+  // script's own font so their digits match the table above and the block
+  // stays editable.
+  let mainEnd = totalRow;
+  if (m.deathTable) {
+    const d = m.deathTable;
+    const uni = (size = FONT_SIZE, bold = false): Partial<ExcelJS.Font> => ({ name: 'Nirmala UI', size, bold });
+    const dHeading = totalRow + 2;
+    ws.mergeCells(`A${dHeading}:H${dHeading}`);
+    set(`A${dHeading}`, d.headingText, { font: uni(13, true), alignment: centered });
+
+    const dHead = dHeading + 2;
+    ws.mergeCells(`B${dHead}:D${dHead}`);
+    ws.mergeCells(`E${dHead}:H${dHead}`);
+    const dHdr = { font: uni(FONT_SIZE, true), alignment: centered, border: thin, fill: peachFill };
+    set(`A${dHead}`, LABELS.serialFlat.unicode, dHdr);
+    set(`B${dHead}`, DEATH_TABLE_LABELS.district, dHdr);
+    set(`E${dHead}`, DEATH_TABLE_LABELS.deaths, dHdr);
+    for (const col of ['C', 'D', 'F', 'G', 'H']) {
+      ws.getCell(`${col}${dHead}`).border = thin;
+      ws.getCell(`${col}${dHead}`).fill = peachFill;
+    }
+
+    const boxed = (row: number, from: string, to: string) => {
+      for (let c = from.charCodeAt(0); c <= to.charCodeAt(0); c++) ws.getCell(`${String.fromCharCode(c)}${row}`).border = thin;
+    };
+    let n = dHead;
+    if (d.rows.length) {
+      d.rows.forEach((r, i) => {
+        n = dHead + 1 + i;
+        ws.mergeCells(`B${n}:D${n}`);
+        ws.mergeCells(`E${n}:H${n}`);
+        set(`A${n}`, i + 1, { font: base(), alignment: centered, border: thin });
+        set(`B${n}`, r.district, { font: uni(), alignment: { horizontal: 'left', vertical: 'middle' }, border: thin });
+        set(`E${n}`, r.deaths, { font: base(), alignment: centered, border: thin });
+        boxed(n, 'A', 'H');
+      });
+    } else {
+      n = dHead + 1;
+      ws.mergeCells(`A${n}:H${n}`);
+      set(`A${n}`, DEATH_TABLE_LABELS.none, { font: uni(), alignment: centered, border: thin });
+      boxed(n, 'A', 'H');
+    }
+
+    const dTotal = n + 1;
+    ws.mergeCells(`A${dTotal}:D${dTotal}`);
+    ws.mergeCells(`E${dTotal}:H${dTotal}`);
+    set(`A${dTotal}`, LABELS.grandTotal.unicode, { font: uni(FONT_SIZE, true), alignment: centered, border: thin });
+    set(`E${dTotal}`, d.total, { font: base(FONT_SIZE, true), alignment: centered, border: thin });
+    boxed(dTotal, 'A', 'H');
+    mainEnd = dTotal;
+  }
+
   // -- Table 2: year comparison --------------------------------------------
-  const heading2 = totalRow + 2;
+  const heading2 = mainEnd + 2;
   ws.mergeCells(`A${heading2}:H${heading2}`);
   set(`A${heading2}`, m.comparisonHeadingText, { font: base(13, true), alignment: centered });
 

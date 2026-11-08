@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { LABELS } from '@/lib/bijoy';
 import {
+  DEATH_TABLE_LABELS,
   OFFICIAL_REPORT_CSS,
   buildOfficialReportModel,
   downloadOfficialReport,
@@ -192,6 +193,40 @@ export function OfficialReport({ report }: { report: DengueReport }) {
             </tbody>
           </table>
 
+          {m.deathTable && (
+            <>
+              <p className="section-title underline">{m.deathTable.headingText}</p>
+              <table className="death-table">
+                <thead>
+                  <tr>
+                    <th className="num">{LABELS.serialFlat.unicode}</th>
+                    <th className="name">{DEATH_TABLE_LABELS.district}</th>
+                    <th className="count">{DEATH_TABLE_LABELS.deaths}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {m.deathTable.rows.length ? (
+                    m.deathTable.rows.map((r) => (
+                      <tr key={r.serial}>
+                        <td>{r.serial}</td>
+                        <td className="name">{r.district}</td>
+                        <td>{fmtBn(r.deaths)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={3}>{DEATH_TABLE_LABELS.none}</td>
+                    </tr>
+                  )}
+                  <tr className="total">
+                    <td colSpan={2}>{LABELS.grandTotal.unicode}</td>
+                    <td>{fmtBn(m.deathTable.total)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </>
+          )}
+
           <p className="section-title underline">{m.comparisonHeadingText}</p>
           <table>
             <thead>
@@ -230,11 +265,29 @@ export function OfficialReport({ report }: { report: DengueReport }) {
       </div>
 
       <p className="border-t border-rule px-5 py-3 text-micro leading-relaxed text-muted">
-        ঢাকা বিভাগ combines Dhaka Division, Dhaka North City Corporation, and Dhaka South City Corporation into one
-        row, so সর্বমোট is both the press release&apos;s real national total and the sum of the eight rows above, for
-        every column. Discharged and currently-admitted per division come from the PDF&apos;s district-level tables
-        further down the report; Dhaka North and South City Corporation are only published there as one combined
-        figure, which is folded into the ঢাকা বিভাগ row rather than split between the two.
+        {report.dhakaCombined ? (
+          <>
+            ঢাকা বিভাগ is reported by DGHS as one combined division (Dhaka Division, Dhaka North and Dhaka South City
+            Corporation together), so সর্বমোট is both the press release&apos;s own total and the sum of the eight rows
+            above. Every figure, including discharged and currently-admitted, is read directly from the press
+            release&apos;s division summary table.
+          </>
+        ) : (
+          <>
+            ঢাকা বিভাগ combines Dhaka Division, Dhaka North City Corporation, and Dhaka South City Corporation into
+            one row, so সর্বমোট is both the press release&apos;s real national total and the sum of the eight rows
+            above, for every column. Discharged and currently-admitted per division come from the PDF&apos;s
+            district-level tables further down the report; Dhaka North and South City Corporation are only published
+            there as one combined figure, which is folded into the ঢাকা বিভাগ row rather than split between the two.
+          </>
+        )}
+        {report.deaths && (
+          <>
+            {' '}
+            The district-wise death table counts the deaths on the uploaded DGHS death list by the hospital&apos;s
+            reporting district (DNCC, DSCC and Dhaka hospitals all count as Dhaka).
+          </>
+        )}
       </p>
     </section>
   );

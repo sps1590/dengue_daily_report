@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { LABELS, REGION_LABELS } from '@/lib/bijoy';
-import { REGION_EN, type DengueReport } from '@/lib/types';
+import { regionNameEn, type DengueReport } from '@/lib/types';
 
 const fmt = (n: number | null) => (n === null || n === undefined ? '—' : n.toLocaleString('en-US'));
 
@@ -77,7 +77,7 @@ export function SheetTable({ report }: { report: DengueReport }) {
               <tr key={r.key}>
                 <td className="text-center text-muted">{i + 1}</td>
                 <td className={bangla ? 'font-bangla' : ''}>
-                  {bangla ? REGION_LABELS[r.key].unicode : REGION_EN[r.key]}
+                  {bangla ? REGION_LABELS[r.key].unicode : regionNameEn(r.key, report.dhakaCombined)}
                 </td>
                 <td className="text-center">{fmt(r.admitted24h)}</td>
                 <td className={`text-center ${r.deaths24h ? 'text-alert' : ''}`}>{fmt(r.deaths24h)}</td>

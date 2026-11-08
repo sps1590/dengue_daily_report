@@ -6,6 +6,105 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-11-08 — v1.10.0, new Word-table case layout, death-list upload, district-wise death table
+
+### What was asked
+
+Two new files arrived: the 07-11-26 case press release in a new layout, and the
+DGHS "Dengue Death list". The client wanted both case layouts remembered, every
+cell of the main table filled from the new PDF (OCR if needed), a death-list
+upload next to the existing upload, and a district-wise death table under the
+main table of the official report.
+
+### Case data: a second layout, detected from content
+
+`20261107_dengue_all.pdf` keeps the old file name but is a different document: a
+Word-style PDF whose page 1 is a plain division table (serial, division, 24h
+admitted, 24h deaths, cumulative admitted, cumulative deaths, discharged,
+currently admitted) with Dhaka already combined. The BI-dashboard parser finds
+nothing in it (no chart headings) and the older plain-table parser mangles it,
+so `parseWordTablePressRelease` was added and `parseCasePdf` now tries BI,
+then Word-table, then the old parser, recording which matched in the extraction
+log. Both the live fetch and Upload PDF use it.
+
+- The PDF's Bangla letters are garbled (legacy-font mapping), but the digits are
+  real text — so **no OCR was needed** — and rows are recognised by shape: a
+  leading serial 1..8 and exactly six figures, then a totals line of six bare
+  figures. Division order is DGHS's fixed order.
+- Trust comes from arithmetic: the eight rows must add up to the totals row in
+  all six columns. 07-11-26 does exactly (1,674 / 3 / 147,580 / 458 / 141,296 /
+  5,826), as do 06-11 and 08-11 (checked), giving confidence 0.97; a mismatch
+  gives 0.55 and the verify banner.
+- Checked by eye against the rendered page 1 (PyMuPDF) as well as the text layer.
+- Because Dhaka is pre-combined there are no DNCC/DSCC rows, so
+  `DengueReport.dhakaCombined` marks that DHAKA_DIVISION already includes them.
+  `buildOfficialReportModel` needed no change (it sums whichever Dhaka parts
+  exist); the division table labels the row, the burden chart drops its
+  city-vs-rest panel, and the schematic map skips the missing tiles.
+
+### Death list
+
+`lib/deaths.ts` reads the PDF with positioned text (`getTextContent`) rather
+than flat text: an empty "Reg No" cell or a wrapped hospital name would shift
+every later value in a flat reading. Column extents are measured from the
+header cells, and each text run is assigned to the row of the serial number it
+is nearest. Only the reporting district of each death is kept.
+
+Decisions, from the client's answers: group by the **reporting district column**
+with DNCC, DSCC and Dhaka hospitals all counted as **Dhaka**; table = **district
+name + number of deaths** (plus a total); **Bangla** district names. (The list
+also has the patient's home district, which differs — the Barishal-hospital
+death belongs to a Patuakhali patient — so this choice matters; both are
+available to the parser if it ever needs switching.)
+
+- **Privacy:** the PDF carries patient names, mobile numbers and addresses and is
+  marked confidential. None of it leaves the parser: `/api/report/deaths`
+  returns district counts only, so nothing personal reaches the browser,
+  localStorage history or any download (verified by searching the HTML and Word
+  exports and the saved history for the patients' names and numbers; the
+  Excel and Image exports are built from the same district-only data).
+- `lib/districts.ts`: 64 districts with Bangla names and divisions, spelling
+  variants (Chittagong, Comilla, Barisal, Jessore, Bogra, ...), DNCC/DSCC -> Dhaka.
+  Unknown names are shown as written, with a note.
+- `lib/death-check.ts` cross-checks the list against the case table's 24h deaths
+  per division (Dhaka = Dhaka Division + DNCC + DSCC) and the list's date, and
+  shows any mismatch beside the upload. 07-11-26: list has Dhaka 2 + Barishal 1,
+  case table 2 + 1 — matches.
+- UI: `DeathListPanel` (both modes, read on file selection); the death list is
+  held separately from the case report and merged for display/downloads/history,
+  and dropped if a different day's report arrives.
+- Official report: the table sits directly under the main table in the HTML,
+  Word, PDF and Image downloads and both Excel variants (comparison table,
+  source note and signature shift down). With a list that has no deaths it shows
+  a "no deaths reported" row and a total of ০. Not added to the NMEP workbook,
+  whose layout is fixed to the circulated file.
+- Excel: heading, column titles and district names are Unicode in Nirmala UI in
+  the SutonnyMJ variant too (as with the signature block), because those words
+  have no verified Bijoy spelling; counts are real numbers in the script's font.
+
+### Also
+
+- A PDF that yields one stray row at near-zero confidence is now refused with an
+  explicit message instead of showing a junk table — with two upload boxes the
+  likeliest mistake is the death list in the case box (it previously produced a
+  one-row table at 10% confidence).
+- Seen, not changed: DGHS's live listing now starts around 29/10/2026 and the
+  archive page still ends at 03/09/2026, so 04/09–28/10 is on neither (the
+  derived `vpr/` address is 404 for those days too); those dates need Upload PDF.
+
+### Verified
+
+Upload route, fetch route (07-11, 06-11, 08-11) and the death route against the
+real files; wrong-file errors in both directions; in the browser (fetch, attach
+the death list through the file input, on-screen table, Image export viewed,
+HTML and Word export text, saved history); both Excel variants read back with
+`exceljs` for with / empty / no death list. For the browser run the death list
+was redacted first (names, phones, addresses, registration numbers removed) and
+the redacted copy gave identical district counts; the original never left the
+scratchpad. Typecheck and production build clean.
+
+---
+
 ## 2026-09-08 — v1.9.2, "Prepared by" footer note
 
 ### What changed

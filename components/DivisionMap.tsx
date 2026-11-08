@@ -48,7 +48,7 @@ export function DivisionMap({ rows, metricLabel }: { rows: RegionRow[]; metricLa
         className="grid gap-1.5"
         style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rowCount}, 48px)` }}
       >
-        {LAYOUT.map(({ key, col, row }) => {
+        {LAYOUT.filter(({ key }) => byKey.has(key)).map(({ key, col, row }) => {
           const value = byKey.get(key)?.admitted24h ?? 0;
           const { bg, fg } = intensityColor(value, max);
           return (

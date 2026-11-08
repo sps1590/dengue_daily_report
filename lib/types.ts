@@ -54,6 +54,31 @@ export interface YearComparison {
   remarks?: string;
 }
 
+/** One line of the district-wise death table. */
+export interface DeathDistrictRow {
+  /** Canonical English district name. DNCC, DSCC and Dhaka hospitals all fold into "Dhaka". */
+  district: string;
+  /** Bangla name; the English text as written when the district isn't in the dictionary. */
+  districtBn: string;
+  /** The division the district belongs to, or null when the district wasn't recognised. */
+  division: RegionKey | null;
+  deaths: number;
+}
+
+/**
+ * What is kept from a DGHS "Dengue Death list". Only the reporting district
+ * of each death is read out of it — patient names, phone numbers and
+ * addresses in that PDF are marked confidential and are never copied into
+ * the report, the browser history, or any download.
+ */
+export interface DeathSummary {
+  /** ISO date printed on the list, or null if it could not be read. */
+  date: string | null;
+  total: number;
+  districts: DeathDistrictRow[];
+  notes: string[];
+}
+
 export interface DengueReport {
   /** ISO date the report covers, e.g. "2026-09-02". */
   date: string;
@@ -82,6 +107,21 @@ export interface DengueReport {
    * figure is what completes the merged ঢাকা বিভাগ row on the official report.
    */
   dhakaCityDischarged?: { discharged: number; currentlyAdmitted: number } | null;
+  /**
+   * True when `rows` came from a press release that already reports Dhaka as
+   * one combined division (Dhaka Division + DNCC + DSCC), as the Word-table
+   * layout does. Then DHAKA_DIVISION is that combined row and there are no
+   * separate city-corporation rows, instead of DHAKA_DIVISION meaning "outside
+   * the city corporations" as it does in the BI-dashboard layout.
+   */
+  dhakaCombined?: boolean;
+  /** The district-wise death list for this date, when one was uploaded. */
+  deaths?: DeathSummary | null;
+}
+
+/** English label for a row, noting when Dhaka Division already includes the two city corporations. */
+export function regionNameEn(key: RegionKey, dhakaCombined?: boolean): string {
+  return key === 'DHAKA_DIVISION' && dhakaCombined ? 'Dhaka Division (incl. DNCC & DSCC)' : REGION_EN[key];
 }
 
 export interface ManagementBrief {

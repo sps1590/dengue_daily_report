@@ -12,7 +12,7 @@ Pick a date. The app finds that day's press release on the DGHS portal, reads th
 |---|---|
 | 1 | Two sources, picked by date: on/before 03/09/2026, the dengue press-release **archive** page (`dghs.gov.bd/pages/static-pages/dengue-press-release-...`, back to 27/08/2019); after that, the **live** listing (`dghs.gov.bd/pages/miscellaneous-infos`, filtered to that category) — the live listing dropped everything on/before the cutoff at some point, so only the archive still carries those dates |
 | 2 | That entry's own attached PDF link is downloaded and validated |
-| 3 | The PDF — a BI-dashboard export, not a plain table — is parsed: per-division chart figures matched by position, national totals read directly (see `lib/parse.ts`'s `parseBiPressRelease`) |
+| 3 | The PDF is parsed. DGHS publishes two layouts and the right one is recognised from the content (see *Case-data layouts* below): the BI-dashboard export (`parseBiPressRelease`) or, from Nov 2026, a Word-style table (`parseWordTablePressRelease`) |
 | 4 | Below 60% confidence, or on an unrecognised layout, the model re-reads the attached PDF |
 | 5 | Figures, charts, the Excel export, the official-report replica and the brief all become available |
 
@@ -21,6 +21,26 @@ Three outputs:
 - **Excel** — the government sheet, in either legacy SutonnyMJ or Unicode Bangla.
 - **Official report** — an on-screen, pixel-faithful reproduction of the sheet NMEP circulates (peach header shading, black cell borders, the exact eight rows serial ২–৯ with ঢাকা বিভাগ combining Dhaka Division + Dhaka North + Dhaka South City Corporation), downloadable as **Excel (Unicode)**, **Excel (SutonnyMJ)**, **PDF**, **Word**, **HTML**, or an **Image (PNG)** — pick one from the "Download Report" menu. The signature renders as cursive text in every format (`Caveat` where a web font will load, `Segoe Script` in Excel/Word where it won't).
 - **Management brief** — interpretation rather than restatement, in English or Bangla, exportable the same way.
+
+### Case-data layouts
+
+DGHS has published the daily release in two layouts, sometimes under the same `YYYYMMDD_dengue_all.pdf` name, so the layout is detected from the PDF's content, never from its name or date. Both feed the same report:
+
+| Layout | How it is read | Dhaka |
+|---|---|---|
+| **BI-dashboard export** (until ~Oct 2026) | Chart labels matched by position; discharged / currently-admitted per division from the district tables further down | Dhaka Division (outside the city corporations), DNCC and DSCC are separate rows; the official report adds them together |
+| **Word-table layout** (Nov 2026 on) | Page 1 is a plain division table with all six figures. Rows are recognised by shape (serial 1–8 plus six figures) because the Bangla letters in that PDF are garbled, but the digits are real text | Already one combined division, so `report.dhakaCombined` is set and there are no separate city-corporation rows |
+
+The Word-table result is only trusted when its arithmetic holds: the eight division rows must add up to the table's own totals row in every column (confidence 0.97; a mismatch drops it to 0.55 and shows the verify banner). The extraction log names the layout that matched. Neither PDF needs OCR — the figures are in the text layer — and the older plain-table parser remains as a last resort.
+
+### Death list and the district-wise death table
+
+The DGHS "Dengue Death list" is a separate PDF that never comes with the case release, so it has its own upload box (**Death list**, shown in both *Fetch* and *Upload* modes; it is read as soon as the file is chosen). Each death is counted under the **reporting (hospital) district** — DNCC, DSCC and Dhaka hospitals all count as Dhaka — and the official report gets a **district-wise death table directly under the main table** (district name in Bangla, number of deaths, total) in all six downloads. It is not added to the NMEP workbook, whose layout is fixed to the circulated file.
+
+- **Personal data is never kept.** The list carries patient names, mobile numbers and addresses and says so. `lib/deaths.ts` reads the table by column position and keeps only the reporting district of each death; nothing else is returned by `/api/report/deaths`, saved in the browser history, or written into a download.
+- **Cross-check.** The deaths in the last 24 hours in the case table must match the list, division by division; any difference (or a list dated for another day) is shown next to the upload.
+- `lib/districts.ts` holds the 64 districts in Bangla and the spelling variants seen in DGHS lists; a district it does not recognise is shown as written, with a note.
+- The district-table block is Unicode Bangla (Nirmala UI) in the SutonnyMJ Excel too, as the signature block already is: those words have no verified SutonnyMJ spelling, and wrong bytes would show as garbage.
 
 An **Advanced Analysis** tab turns every report saved to this browser into
 trend charts (admissions and deaths over time, cumulative admissions —
@@ -152,6 +172,7 @@ app/
   api/report/route.ts             locate → download → extract → assemble
   api/report/upload/route.ts      same extraction, from an uploaded PDF
   api/report/official-excel/route.ts  official-report workbook
+  api/report/deaths/route.ts      death-list PDF -> district counts only
   api/excel/route.ts              NMEP workbook generation
   api/analyze/route.ts            management brief
 components/
@@ -169,13 +190,17 @@ components/
   DivisionShare.tsx     donut chart, share of admissions by division
   DivisionMap.tsx       schematic reporting-unit map, coloured by intensity
   UploadPdfForm.tsx     upload-and-analyse fallback when the DGHS fetch can't be trusted
+  DeathListPanel.tsx    death-list upload, district summary and cross-check
   Footer.tsx            shared data-caveat footer
 lib/
   bengali.ts            numerals, dates, Dhaka timezone
   bijoy.ts              SutonnyMJ dictionary  ← verified against the reference file
   dghs.ts               listing scrape, PDF download
   pdf.ts                text extraction (unpdf)
-  parse.ts              legacy table parser + parseBiPressRelease for the current export format
+  parse.ts              case-PDF layouts: BI-dashboard, Word-table, legacy; parseCasePdf picks one
+  deaths.ts             death-list reader (column-position based; keeps districts only)
+  districts.ts          64 districts in Bangla + spelling variants, DNCC/DSCC -> Dhaka
+  death-check.ts        death list vs the case table's 24h deaths
   ai.ts                 model extraction and brief generation
   export-official-report.ts  official-report data model + HTML/Word export
   export-official-excel.ts   official-report Excel workbook (server-side)

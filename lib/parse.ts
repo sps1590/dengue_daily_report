@@ -76,7 +76,21 @@ export interface PatternResult {
    * — see `districtTableDivisionTotals` in this file.
    */
   dhakaCityCombined?: { discharged: number; currentlyAdmitted: number } | null;
+  /** Which press-release layout produced this result (set by `parseCasePdf`). */
+  format?: CaseFormat;
+  /** See `DengueReport.dhakaCombined`. */
+  dhakaCombined?: boolean;
+  /** ISO date printed on the PDF itself, when the layout carries one. */
+  printedDate?: string | null;
 }
+
+export type CaseFormat = 'bi-dashboard' | 'word-table' | 'legacy-table';
+
+export const CASE_FORMAT_LABEL: Record<CaseFormat, string> = {
+  'bi-dashboard': 'DGHS BI-dashboard export (charts and per-district tables)',
+  'word-table': 'DGHS Word-table layout (division summary table on page 1)',
+  'legacy-table': 'older plain division table',
+};
 
 export function parseReportText(rawText: string, reportYear: number): PatternResult {
   const text = normalise(rawText);
@@ -466,6 +480,141 @@ export function parseBiPressRelease(rawText: string, _reportYear: number): Patte
   const comparison: YearComparison[] = [];
 
   return { rows, totals, comparison, confidence, notes, dhakaCityCombined: districtTotals.dhakaCityCombined };
+}
+
+// ---------------------------------------------------------------------------
+// Word-table layout parser
+// ---------------------------------------------------------------------------
+
+/**
+ * From November 2026 DGHS also publishes the daily release as a Word-style
+ * document (same `YYYYMMDD_dengue_all.pdf` name). Page 1 is a plain table —
+ * one row per division with all six figures, including discharged and
+ * currently admitted, and Dhaka already reported as a single combined
+ * division — followed by hospital-wise and district-wise pages this parser
+ * does not need.
+ *
+ * The Bangla letters in that PDF come out garbled (a legacy-font quirk), but
+ * the digits are real text, so rows are recognised by shape rather than by
+ * name: a leading serial 1..8 followed by exactly six figures, then a
+ * totals line of six bare figures. The divisions are always listed in the
+ * same order DGHS uses everywhere (the order of `WORD_TABLE_ORDER`), and the
+ * arithmetic is checked: every column of the eight rows must add up to the
+ * totals line, otherwise the result is flagged as low-confidence.
+ */
+const WORD_TABLE_ORDER: RegionKey[] = [
+  'DHAKA_DIVISION',
+  'MYMENSINGH',
+  'CHATTOGRAM',
+  'KHULNA',
+  'RAJSHAHI',
+  'RANGPUR',
+  'BARISHAL',
+  'SYLHET',
+];
+
+const COLUMN_NAMES = ['admitted24h', 'deaths24h', 'totalAdmitted', 'totalDeaths', 'discharged', 'currentlyAdmitted'] as const;
+
+/** "7র্র্ শোল র্র্ ভোগ 213 1 18281 31 17559 691" -> [213, 1, 18281, 31, 17559, 691] when `serial` is 7. */
+function summaryRow(line: string, serial: number): number[] | null {
+  const lead = line.match(/^(\d{1,2})(?!\d)/);
+  if (!lead || Number(lead[1]) !== serial) return null;
+  const nums = numbersIn(line);
+  return nums.length === 7 ? nums.slice(1) : null;
+}
+
+/** A line made only of figures: the table's totals row has no label of its own. */
+function bareFigures(line: string): number[] | null {
+  if (!/^[\d,\s]+$/.test(line)) return null;
+  const nums = numbersIn(line);
+  return nums.length === 6 ? nums : null;
+}
+
+export function parseWordTablePressRelease(rawText: string): PatternResult {
+  const empty: PatternResult = { rows: [], totals: null, comparison: [], confidence: 0, notes: [] };
+  const lines = normalise(rawText)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const n = WORD_TABLE_ORDER.length;
+  let start = -1;
+  let figures: number[][] = [];
+  for (let s = 0; s + n < lines.length && start < 0; s++) {
+    const block: number[][] = [];
+    for (let k = 0; k < n; k++) {
+      const row = summaryRow(lines[s + k], k + 1);
+      if (!row) break;
+      block.push(row);
+    }
+    if (block.length === n && bareFigures(lines[s + n])) {
+      start = s;
+      figures = block;
+    }
+  }
+  if (start < 0) return { ...empty, notes: ['Not the Word-table layout.'] };
+
+  const totalsFigures = bareFigures(lines[start + n])!;
+  const toRow = (f: number[]): Omit<RegionRow, 'key'> => ({
+    admitted24h: f[0],
+    deaths24h: f[1],
+    totalAdmitted: f[2],
+    totalDeaths: f[3],
+    discharged: f[4],
+    currentlyAdmitted: f[5],
+  });
+
+  const rows: RegionRow[] = WORD_TABLE_ORDER.map((key, i) => ({ key, ...toRow(figures[i]) }));
+  const totals = toRow(totalsFigures);
+
+  const notes: string[] = [];
+  const mismatched = COLUMN_NAMES.filter((col, c) => figures.reduce((sum, f) => sum + f[c], 0) !== totalsFigures[c]);
+  if (mismatched.length) {
+    notes.push(
+      `The eight division rows do not add up to the table's own totals row on: ${mismatched.join(', ')}. Check the figures against the PDF.`,
+    );
+  } else {
+    notes.push("All six columns of the eight division rows add up exactly to the table's totals row.");
+  }
+  notes.push(
+    'Dhaka is reported as one combined division here (Dhaka Division + DNCC + DSCC); the PDF does not split it, so there are no separate city-corporation rows.',
+  );
+
+  // "তারিখ 07-11-26" sits at the top of every page: dd-mm-yy.
+  let printedDate: string | null = null;
+  for (const line of lines.slice(0, 6)) {
+    const m = line.match(/(\d{2})-(\d{2})-(\d{2})\s*$/);
+    if (m) {
+      printedDate = `20${m[3]}-${m[2]}-${m[1]}`;
+      break;
+    }
+  }
+
+  return {
+    rows,
+    totals,
+    comparison: [],
+    confidence: mismatched.length ? 0.55 : 0.97,
+    notes,
+    dhakaCombined: true,
+    printedDate,
+  };
+}
+
+/**
+ * Tries each press-release layout this app knows, newest first, and records
+ * which one matched. The BI-dashboard export and the Word-table layout can
+ * both be published under the same file name, so the layout is recognised
+ * from the content, never from the name or the date.
+ */
+export function parseCasePdf(text: string, year: number): PatternResult {
+  const bi = parseBiPressRelease(text, year);
+  if (bi.rows.length) return { ...bi, format: 'bi-dashboard' };
+
+  const word = parseWordTablePressRelease(text);
+  if (word.rows.length) return { ...word, format: 'word-table' };
+
+  return { ...parseReportText(text, year), format: 'legacy-table' };
 }
 
 export function sumRows(rows: RegionRow[]): Omit<RegionRow, 'key'> {

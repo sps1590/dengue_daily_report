@@ -1,7 +1,7 @@
 'use client';
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { DHAKA_CITY_KEYS, REGION_EN, type DengueReport } from '@/lib/types';
+import { DHAKA_CITY_KEYS, regionNameEn, type DengueReport } from '@/lib/types';
 
 /**
  * Two views of the same day. The split answers "is this a city outbreak or a
@@ -25,11 +25,16 @@ export function BurdenChart({ report }: { report: DengueReport }) {
   ];
 
   const ranked = rows
-    .map((r) => ({ name: REGION_EN[r.key], value: r.admitted24h ?? 0 }))
+    .map((r) => ({ name: regionNameEn(r.key, report.dhakaCombined), value: r.admitted24h ?? 0 }))
     .sort((a, b) => b.value - a.value);
 
+  // Some releases report Dhaka as one combined division, so there is no
+  // separate figure for the city corporations to set against the rest.
+  const hasCitySplit = report.rows.some((r) => DHAKA_CITY_KEYS.includes(r.key));
+
   return (
-    <section className="grid gap-4 lg:grid-cols-2">
+    <section className={`grid gap-4 ${hasCitySplit ? 'lg:grid-cols-2' : ''}`}>
+      {hasCitySplit && (
       <Panel title="Admissions in the last 24 hours" subtitle="Dhaka city against the rest of the country">
         <ResponsiveContainer width="100%" height={210}>
           <BarChart data={split} margin={{ top: 8, right: 8, left: -18, bottom: 4 }}>
@@ -44,6 +49,7 @@ export function BurdenChart({ report }: { report: DengueReport }) {
           </BarChart>
         </ResponsiveContainer>
       </Panel>
+      )}
 
       <Panel title="Where the admissions are" subtitle="Every reporting unit, highest first">
         <ResponsiveContainer width="100%" height={210}>

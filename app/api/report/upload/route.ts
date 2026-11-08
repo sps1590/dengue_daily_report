@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isPlausibleReportDate } from '@/lib/bengali';
 import { extractPdfText } from '@/lib/pdf';
-import { parseBiPressRelease, parseReportText, sumRows } from '@/lib/parse';
+import { CASE_FORMAT_LABEL, parseCasePdf, sumRows } from '@/lib/parse';
 import { extractWithModel, hasModelAccess } from '@/lib/ai';
 import type { DengueReport } from '@/lib/types';
 
@@ -52,12 +52,19 @@ export async function POST(req: Request) {
 
     const { text, pages, looksScanned } = await extractPdfText(bytes);
 
-    const bi = parseBiPressRelease(text, year);
-    const pattern = bi.rows.length ? bi : parseReportText(text, year);
-    const notes = ['Uploaded manually; not fetched from DGHS.', ...pattern.notes];
+    const pattern = parseCasePdf(text, year);
+    const notes = [
+      'Uploaded manually; not fetched from DGHS.',
+      `Layout recognised: ${CASE_FORMAT_LABEL[pattern.format ?? 'legacy-table']}.`,
+      ...pattern.notes,
+    ];
+    if (pattern.printedDate && pattern.printedDate !== date) {
+      notes.push(`The PDF is dated ${pattern.printedDate} but ${date} was selected; check it is the right day's release.`);
+    }
     if (looksScanned) notes.push(`The PDF has almost no text layer (${pages} page(s)); it is probably a scan.`);
 
     let rows = pattern.rows;
+    let dhakaCombined = pattern.dhakaCombined ?? false;
     let comparison = pattern.comparison;
     let method: DengueReport['extraction']['method'] = 'pattern';
     let confidence = pattern.confidence;
@@ -68,6 +75,7 @@ export async function POST(req: Request) {
         if (model.rows.length > rows.length) {
           method = rows.length ? 'mixed' : 'model';
           rows = model.rows;
+          dhakaCombined = false;
           comparison = model.comparison.length ? model.comparison : comparison;
           confidence = Math.min(0.95, 0.55 + model.rows.length * 0.04);
           notes.push('The pattern parser fell short, so the PDF was re-read by the model.');
@@ -80,6 +88,19 @@ export async function POST(req: Request) {
       notes.push('Confidence is low and no model key is configured. Check the figures against the source PDF.');
     }
 
+    // One stray row at near-zero confidence is not a release that was
+    // misread, it is a different document — most likely the death list put in
+    // this box by mistake, now that there are two upload boxes.
+    if (rows.length > 0 && rows.length < 3 && confidence < 0.3) {
+      return NextResponse.json(
+        {
+          error:
+            'This PDF does not look like a DGHS dengue case press release (no division table was found in it). If it is the Dengue Death list, upload it in the "Death list" box instead.',
+        },
+        { status: 422 },
+      );
+    }
+
     const report: DengueReport = {
       date,
       sourceUrl: '',
@@ -90,6 +111,7 @@ export async function POST(req: Request) {
       extraction: { method, confidence, notes: notes.filter(Boolean) },
       rawText: text.slice(0, 20_000),
       dhakaCityDischarged: pattern.dhakaCityCombined ?? null,
+      dhakaCombined,
     };
 
     return NextResponse.json(report);

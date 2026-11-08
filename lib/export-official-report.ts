@@ -1,4 +1,4 @@
-import { toBengaliDigits } from './bengali';
+import { toBengaliDateLabel, toBengaliDigits } from './bengali';
 import { LABELS, REGION_LABELS, comparisonHeading, cumulativeHeader, periodLabel } from './bijoy';
 import { downloadFile } from './export-brief';
 import { sumRows } from './parse';
@@ -23,8 +23,28 @@ export interface OfficialReportRow {
   row: RegionRow;
 }
 
+/**
+ * Wording of the district-wise death table. Unicode Bangla only — unlike the
+ * main sheet's labels these have no verified SutonnyMJ spelling, so the Excel
+ * export writes this block in Unicode (Nirmala UI) in both script variants,
+ * the same way it already does for the signature block.
+ */
+export const DEATH_TABLE_LABELS = {
+  district: 'জেলার নাম',
+  deaths: 'মৃত্যুর সংখ্যা',
+  none: 'এই তারিখে কোনো মৃত্যু প্রতিবেদিত হয়নি।',
+} as const;
+
+export interface OfficialDeathTable {
+  headingText: string;
+  rows: { serial: string; district: string; deaths: number }[];
+  total: number;
+}
+
 export interface OfficialReportModel {
   rows: OfficialReportRow[];
+  /** District-wise deaths for the date, when a death list was uploaded; null otherwise. */
+  deathTable: OfficialDeathTable | null;
   /**
    * The সর্বমোট row: the press release's own real national totals for every
    * column, not a sum of the eight shown rows. The two omit Dhaka North/South
@@ -99,8 +119,18 @@ export function buildOfficialReportModel(report: DengueReport): OfficialReportMo
     },
   ];
 
+  const deaths = report.deaths;
+  const deathTable: OfficialDeathTable | null = deaths
+    ? {
+        headingText: `${toBengaliDateLabel(deaths.date ?? report.date)} তারিখে জেলাভিত্তিক ডেঙ্গু মৃত্যুর তালিকা নিম্নরূপঃ`,
+        rows: deaths.districts.map((d, i) => ({ serial: toBengaliDigits(i + 1), district: d.districtBn, deaths: d.deaths })),
+        total: deaths.total,
+      }
+    : null;
+
   return {
     rows,
+    deathTable,
     rowTotals: report.totals,
     nationalDischarged: report.totals.discharged,
     nationalCurrentlyAdmitted: report.totals.currentlyAdmitted,
@@ -126,6 +156,8 @@ export const OFFICIAL_REPORT_CSS = `
 .official-report .signature-cursive{font-family:"Mrs Saint Delafield","Petit Formal Script",cursive;font-weight:400;font-size:46px;line-height:1;color:#1a1a2e;display:inline-block;transform:rotate(-3deg);}
 .official-report .signature-date{margin-top:2px;font-size:13px;}
 .official-report .signature-role{margin-top:2px;font-size:13px;}
+.official-report table.death-table th.num{width:14%;}
+.official-report table.death-table th.count{width:30%;}
 .official-report .prepared-by{margin-top:18px;font-size:12px;text-align:right;color:#fffbf7;}
 `;
 
@@ -171,6 +203,42 @@ function comparisonRowsHtml(m: OfficialReportModel): string {
     .join('');
 }
 
+/** The district-wise death table (heading + table), or nothing when no death list was uploaded. */
+function deathTableHtml(m: OfficialReportModel): string {
+  const d = m.deathTable;
+  if (!d) return '';
+  const body = d.rows.length
+    ? d.rows
+        .map(
+          (r) => `<tr>
+      <td>${r.serial}</td>
+      <td class="name">${r.district.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</td>
+      <td>${fmtBn(r.deaths)}</td>
+    </tr>`,
+        )
+        .join('')
+    : `<tr><td colspan="3">${DEATH_TABLE_LABELS.none}</td></tr>`;
+  return `
+  <p class="section-title underline">${d.headingText}</p>
+  <table class="death-table">
+    <thead>
+      <tr>
+        <th class="num">${LABELS.serialFlat.unicode}</th>
+        <th class="name">${DEATH_TABLE_LABELS.district}</th>
+        <th class="count">${DEATH_TABLE_LABELS.deaths}</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${body}
+      <tr class="total">
+        <td colspan="2">${LABELS.grandTotal.unicode}</td>
+        <td>${fmtBn(d.total)}</td>
+      </tr>
+    </tbody>
+  </table>
+`;
+}
+
 /** The `.official-report` markup itself, shared by the HTML/print export and the Word export. */
 function officialReportBodyHtml(m: OfficialReportModel): string {
   return `<div class="official-report">
@@ -203,7 +271,7 @@ function officialReportBodyHtml(m: OfficialReportModel): string {
       ${tableRowsHtml(m)}
     </tbody>
   </table>
-
+${deathTableHtml(m)}
   <p class="section-title underline">${m.comparisonHeadingText}</p>
   <table>
     <thead>
