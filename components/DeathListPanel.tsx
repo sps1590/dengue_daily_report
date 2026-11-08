@@ -56,7 +56,7 @@ export function DeathListPanel({ report, deaths, onDeaths }: Props) {
       </h2>
       <p className="mt-1 text-[13px] leading-relaxed text-muted">
         Upload the day&apos;s DGHS &ldquo;Dengue Death list&rdquo; PDF. The report gets a district-wise death table
-        under the main table. Only the district of each death is read &mdash; names and phone numbers are never copied.
+        below the year-comparison table. Only the district of each death is read &mdash; names and phone numbers are never copied.
       </p>
 
       <input

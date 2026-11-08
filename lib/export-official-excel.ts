@@ -125,17 +125,19 @@ export async function buildOfficialReportWorkbook(report: DengueReport, script: 
   set(`G${totalRow}`, m.nationalDischarged, totalStyle);
   set(`H${totalRow}`, m.nationalCurrentlyAdmitted, totalStyle);
 
-  // -- Table 1b: district-wise deaths (only when a death list was uploaded) ----
+  // -- District-wise deaths (only when a death list was uploaded) --------------
+  // Sits after the year-comparison table, so it is written by a function that
+  // is called once that table's last row is known. Returns the last row used.
   // The wording has no verified SutonnyMJ spelling, so heading, column titles
   // and district names are Unicode in Nirmala UI in both script variants (as
   // with the signature block below). The counts are real numbers, in the
   // script's own font so their digits match the table above and the block
   // stays editable.
-  let mainEnd = totalRow;
-  if (m.deathTable) {
+  const addDeathTable = (after: number): number => {
     const d = m.deathTable;
+    if (!d) return after;
     const uni = (size = FONT_SIZE, bold = false): Partial<ExcelJS.Font> => ({ name: 'Nirmala UI', size, bold });
-    const dHeading = totalRow + 2;
+    const dHeading = after + 2;
     ws.mergeCells(`A${dHeading}:H${dHeading}`);
     set(`A${dHeading}`, d.headingText, { font: uni(13, true), alignment: centered });
 
@@ -178,11 +180,11 @@ export async function buildOfficialReportWorkbook(report: DengueReport, script: 
     set(`A${dTotal}`, LABELS.grandTotal.unicode, { font: uni(FONT_SIZE, true), alignment: centered, border: thin });
     set(`E${dTotal}`, d.total, { font: base(FONT_SIZE, true), alignment: centered, border: thin });
     boxed(dTotal, 'A', 'H');
-    mainEnd = dTotal;
-  }
+    return dTotal;
+  };
 
   // -- Table 2: year comparison --------------------------------------------
-  const heading2 = mainEnd + 2;
+  const heading2 = totalRow + 2;
   ws.mergeCells(`A${heading2}:H${heading2}`);
   set(`A${heading2}`, m.comparisonHeadingText, { font: base(13, true), alignment: centered });
 
@@ -215,7 +217,7 @@ export async function buildOfficialReportWorkbook(report: DengueReport, script: 
   });
 
   // -- Footer ------------------------------------------------------------------
-  const noteRow = cmpHead + m.comparisonRows.length + 2;
+  const noteRow = addDeathTable(cmpHead + m.comparisonRows.length) + 2;
   ws.mergeCells(`A${noteRow}:H${noteRow}`);
   set(`A${noteRow}`, pick(LABELS.sourceNote, script), { font: base(FONT_SIZE, true), alignment: { horizontal: 'left', vertical: 'middle', wrapText: true } });
 

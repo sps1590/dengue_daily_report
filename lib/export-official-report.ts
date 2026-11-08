@@ -271,7 +271,7 @@ function officialReportBodyHtml(m: OfficialReportModel): string {
       ${tableRowsHtml(m)}
     </tbody>
   </table>
-${deathTableHtml(m)}
+
   <p class="section-title underline">${m.comparisonHeadingText}</p>
   <table>
     <thead>
@@ -287,7 +287,7 @@ ${deathTableHtml(m)}
       ${comparisonRowsHtml(m)}
     </tbody>
   </table>
-
+${deathTableHtml(m)}
   <p class="source-note">${LABELS.sourceNote.unicode}</p>
 
   <div class="signature-block">

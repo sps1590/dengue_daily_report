@@ -6,6 +6,21 @@ Add a new entry at the top of the log for each change. Keep the "verified" line 
 
 ---
 
+## 2026-11-08 — v1.10.1, death table moved below the comparison table
+
+The client asked for the district-wise death table to sit under the
+২০২৫-২০২৬ comparison table instead of directly under the main table. Order is
+now: main table, comparison table, death table, source note, signature. Changed
+in the three places that render it: `officialReportBodyHtml` (HTML and Word),
+`OfficialReport.tsx` (on screen, Image and PDF) and the Excel builder, where the
+block is now a function (`addDeathTable`) called after the comparison rows, so
+the source note and signature still follow it. Layout with no death list is
+unchanged. Verified: on-screen element order, the Image download (viewed), HTML
+export order, and both Excel variants read back with `exceljs`. (v1.10.0 below
+says "directly under the main table"; that was the first position.)
+
+---
+
 ## 2026-11-08 — v1.10.0, new Word-table case layout, death-list upload, district-wise death table
 
 ### What was asked

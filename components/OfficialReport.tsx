@@ -193,6 +193,30 @@ export function OfficialReport({ report }: { report: DengueReport }) {
             </tbody>
           </table>
 
+          <p className="section-title underline">{m.comparisonHeadingText}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>{LABELS.serialFlat.unicode}</th>
+                <th className="name">{LABELS.year.unicode}</th>
+                <th>{LABELS.caseCount.unicode}</th>
+                <th>{LABELS.deathCount.unicode}</th>
+                <th>{LABELS.remarks.unicode}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {m.comparisonRows.map((r) => (
+                <tr key={r.serial}>
+                  <td>{r.serial}</td>
+                  <td className="name">{r.periodLabel}</td>
+                  <td>{fmtBn(r.cases)}</td>
+                  <td>{fmtBn(r.deaths)}</td>
+                  <td></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
           {m.deathTable && (
             <>
               <p className="section-title underline">{m.deathTable.headingText}</p>
@@ -226,30 +250,6 @@ export function OfficialReport({ report }: { report: DengueReport }) {
               </table>
             </>
           )}
-
-          <p className="section-title underline">{m.comparisonHeadingText}</p>
-          <table>
-            <thead>
-              <tr>
-                <th>{LABELS.serialFlat.unicode}</th>
-                <th className="name">{LABELS.year.unicode}</th>
-                <th>{LABELS.caseCount.unicode}</th>
-                <th>{LABELS.deathCount.unicode}</th>
-                <th>{LABELS.remarks.unicode}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {m.comparisonRows.map((r) => (
-                <tr key={r.serial}>
-                  <td>{r.serial}</td>
-                  <td className="name">{r.periodLabel}</td>
-                  <td>{fmtBn(r.cases)}</td>
-                  <td>{fmtBn(r.deaths)}</td>
-                  <td></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
 
           <p className="source-note">{LABELS.sourceNote.unicode}</p>
 
